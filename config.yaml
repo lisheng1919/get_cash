@@ -1,0 +1,91 @@
+# 策略开关
+strategies:
+  bond_ipo:
+    enabled: true
+  bond_allocation:
+    enabled: true
+  reverse_repo:
+    enabled: true
+  lof_premium:
+    enabled: true
+
+# 可转债打新配置
+bond_ipo:
+  auto_subscribe: true
+  notify_on_subscribe: true
+  notify_on_winning: true
+  notify_on_listing: true
+  max_consecutive_miss: 2
+
+# 可转债配债配置
+bond_allocation:
+  min_content_weight: 20
+  min_safety_cushion: 5.0
+  min_stock_volume: 1000
+  max_stock_amount_ratio: 0.2
+  notify_before_record_day: 1
+  notify_on_listing: true
+  conservative_factor: 0.8
+  rush_warning_threshold: 5.0
+
+# 逆回购配置
+reverse_repo:
+  amount: 100000
+  prefer_sh: true
+  min_rate: 3.0
+  reserve_ratio: 0.2
+  remind_time: "14:30"
+
+# LOF溢价监控配置
+lof_premium:
+  poll_interval: 5
+  random_delay_max: 3
+  premium_threshold: 3.0
+  low_precision_threshold: 3.0
+  min_volume: 500
+  confirm_count: 3
+  cooldown_minutes: 5
+
+# 底仓风控
+position:
+  max_drawdown: 15.0
+  dca_mode: true
+
+# 数据源配置
+data_source:
+  iopv_primary: "eastmoney"
+  iopv_fallback: "xtquant"
+  market_primary: "akshare"
+  market_fallback: "sina"
+  max_consecutive_failures: 3
+
+# 通知配置
+notify:
+  desktop:
+    enabled: true
+  wechat:
+    enabled: false
+    serverchan_key: ""
+  dingtalk:
+    enabled: false
+    webhook: ""
+  dual_channel_events:
+    - bond_winning
+    - bond_allocation_action
+    - listing_sell
+    - data_source_failure
+
+# 风控配置
+risk:
+  max_daily_trades_per_fund: 1
+  max_single_trade_ratio: 0.3
+  hard_stop_loss: 5.0
+  bond_ipo_max_consecutive_miss: 2
+
+# 系统配置
+system:
+  startup_selfcheck: true
+  heartbeat_interval: 300
+  data_retention_days: 90
+  data_aggregate_hours: true
+  db_vacuum_weekly: true
