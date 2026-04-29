@@ -3,7 +3,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from config_loader import load_config
+from config_loader import load_config, validate_config
 from data.models import init_db
 from data.storage import Storage
 from data.collector import DataCollector
@@ -68,6 +68,74 @@ def setup_notifier(config: dict) -> NotificationManager:
     return mgr
 
 
+def run_selfcheck(config: dict, storage: Storage, collector: DataCollector) -> None:
+    """启动自检：检查数据源连通性、数据库完整性、配置有效性、交易日历
+
+    所有检查失败仅记录日志，不阻止系统启动。
+
+    Args:
+        config: 完整配置字典
+        storage: 数据存储实例
+        collector: 数据采集器实例
+    """
+    results = []  # 汇总检查结果
+
+    # 1. 检查数据源连通性
+    try:
+        collector.fetch_lof_fund_list()
+        results.append(("数据源连通性", "PASS"))
+    except Exception as e:
+        logger.warning("自检-数据源连通性异常: %s", e)
+        results.append(("数据源连通性", "FAIL: %s" % e))
+
+    # 2. 检查SQLite完整性
+    try:
+        cursor = storage._conn.execute("PRAGMA integrity_check")
+        row = cursor.fetchone()
+        integrity_result = row[0] if row else ""
+        if integrity_result == "ok":
+            results.append(("SQLite完整性", "PASS"))
+        else:
+            logger.error("自检-SQLite完整性异常: %s", integrity_result)
+            results.append(("SQLite完整性", "FAIL: %s" % integrity_result))
+    except Exception as e:
+        logger.error("自检-SQLite完整性检查失败: %s", e)
+        results.append(("SQLite完整性", "FAIL: %s" % e))
+
+    # 3. 检查配置有效性
+    try:
+        errors = validate_config(config)
+        if not errors:
+            results.append(("配置有效性", "PASS"))
+        else:
+            for err in errors:
+                logger.error("自检-配置校验失败: %s", err)
+            results.append(("配置有效性", "FAIL: %s" % "; ".join(errors)))
+    except Exception as e:
+        logger.error("自检-配置校验异常: %s", e)
+        results.append(("配置有效性", "FAIL: %s" % e))
+
+    # 4. 检查交易日历数据
+    try:
+        cursor = storage._conn.execute("SELECT COUNT(*) FROM holiday_calendar")
+        row = cursor.fetchone()
+        count = row[0] if row else 0
+        if count > 0:
+            results.append(("交易日历数据", "PASS (%d条)" % count))
+        else:
+            logger.warning("自检-交易日历表为空，首次运行属正常情况")
+            results.append(("交易日历数据", "WARN: 表为空"))
+    except Exception as e:
+        logger.warning("自检-交易日历检查异常: %s", e)
+        results.append(("交易日历数据", "WARN: %s" % e))
+
+    # 汇总输出
+    logger.info("===== 启动自检结果 =====")
+    for name, result in results:
+        logger.info("  %s: %s", name, result)
+    logger.info("===== 自检完成 =====")
+
+
 def main():
     """系统主入口：加载配置、初始化各模块、注册策略并启动调度器"""
     # 加载配置
@@ -129,6 +197,14 @@ def main():
     scheduler.add_daily_job("bond_ipo", 9, 30)
     scheduler.add_daily_job("reverse_repo", 14, 30)
     scheduler.add_daily_job("bond_allocation", 9, 0)
+
+    # 启动自检
+    if config.get("system", {}).get("startup_selfcheck", True):
+        run_selfcheck(config, storage, collector)
+
+    # 注册心跳任务
+    heartbeat_interval = config.get("system", {}).get("heartbeat_interval", 300)
+    scheduler.add_heartbeat_job(heartbeat_interval)
 
     logger.info("系统启动完成")
     scheduler.start()

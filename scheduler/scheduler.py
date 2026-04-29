@@ -29,6 +29,7 @@ class StrategyScheduler:
         self._scheduler = BlockingScheduler()
         self._calendar = calendar
         self._strategies = {}  # type: dict[str, BaseStrategy]
+        self._heartbeat_interval = 300  # 默认5分钟
 
     def register(self, strategy: BaseStrategy) -> None:
         """注册策略
@@ -96,6 +97,28 @@ class StrategyScheduler:
             name=f"interval_{strategy_name}",
         )
         logger.info("间隔任务已添加: %s, 每 %d 秒", strategy_name, seconds)
+
+    def add_heartbeat_job(self, interval: int = 300) -> None:
+        """添加心跳定时任务，定期输出系统运行状态日志
+
+        Args:
+            interval: 心跳间隔秒数，默认300秒（5分钟）
+        """
+        self._heartbeat_interval = interval
+        strategy_names = list(self._strategies.keys())
+
+        def _heartbeat():
+            logger.info(
+                "系统心跳：正常运行中，已注册策略: %s",
+                strategy_names,
+            )
+
+        self._scheduler.add_job(
+            _heartbeat,
+            trigger=IntervalTrigger(seconds=self._heartbeat_interval),
+            name="system_heartbeat",
+        )
+        logger.info("心跳任务已添加，间隔 %d 秒", self._heartbeat_interval)
 
     def start(self) -> None:
         """启动调度器（阻塞运行）"""
