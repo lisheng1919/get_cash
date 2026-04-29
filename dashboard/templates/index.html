@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人量化套利中枢</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: "Microsoft YaHei", sans-serif; background: #f5f5f5; color: #333; padding: 20px; }
+        h1 { text-align: center; margin-bottom: 24px; font-size: 24px; color: #222; }
+        .section { background: #fff; border-radius: 6px; padding: 16px 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .section h2 { font-size: 16px; color: #444; margin-bottom: 12px; border-left: 3px solid #1890ff; padding-left: 8px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #e8e8e8; white-space: nowrap; }
+        th { background: #fafafa; color: #666; font-weight: 600; }
+        tr:hover td { background: #f0f7ff; }
+        .empty { color: #999; padding: 12px 0; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <h1>个人量化套利中枢</h1>
+
+    <!-- LOF套利信号 -->
+    <div class="section">
+        <h2>LOF套利信号</h2>
+        {% if signals %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>触发时间</th>
+                    <th>基金代码</th>
+                    <th>溢价率(%)</th>
+                    <th>动作</th>
+                    <th>状态</th>
+                    <th>IOPV来源</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in signals %}
+                <tr>
+                    <td>{{ row['id'] }}</td>
+                    <td>{{ row['trigger_time'] }}</td>
+                    <td>{{ row['fund_code'] }}</td>
+                    <td>{{ row['premium_rate'] }}</td>
+                    <td>{{ row['action'] }}</td>
+                    <td>{{ row['status'] }}</td>
+                    <td>{{ row['iopv_source'] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty">暂无数据</p>
+        {% endif %}
+    </div>
+
+    <!-- 可转债打新 -->
+    <div class="section">
+        <h2>可转债打新</h2>
+        {% if bond_ipos %}
+        <table>
+            <thead>
+                <tr>
+                    <th>代码</th>
+                    <th>名称</th>
+                    <th>申购日期</th>
+                    <th>中签结果</th>
+                    <th>缴款状态</th>
+                    <th>上市日期</th>
+                    <th>卖出状态</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in bond_ipos %}
+                <tr>
+                    <td>{{ row['code'] }}</td>
+                    <td>{{ row['name'] }}</td>
+                    <td>{{ row['subscribe_date'] }}</td>
+                    <td>{{ row['winning_result'] }}</td>
+                    <td>{{ row['payment_status'] }}</td>
+                    <td>{{ row['listing_date'] }}</td>
+                    <td>{{ row['sell_status'] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty">暂无数据</p>
+        {% endif %}
+    </div>
+
+    <!-- 可转债配债 -->
+    <div class="section">
+        <h2>可转债配债</h2>
+        {% if allocations %}
+        <table>
+            <thead>
+                <tr>
+                    <th>债券代码</th>
+                    <th>正股代码</th>
+                    <th>正股名称</th>
+                    <th>含权权重</th>
+                    <th>安全垫(%)</th>
+                    <th>股权登记日</th>
+                    <th>配售缴款日</th>
+                    <th>上市日期</th>
+                    <th>状态</th>
+                    <th>实际滑点(%)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in allocations %}
+                <tr>
+                    <td>{{ row['code'] }}</td>
+                    <td>{{ row['stock_code'] }}</td>
+                    <td>{{ row['stock_name'] }}</td>
+                    <td>{{ row['content_weight'] }}</td>
+                    <td>{{ row['safety_cushion'] }}</td>
+                    <td>{{ row['record_date'] }}</td>
+                    <td>{{ row['payment_date'] }}</td>
+                    <td>{{ row['listing_date'] }}</td>
+                    <td>{{ row['status'] }}</td>
+                    <td>{{ row['actual_slippage'] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty">暂无数据</p>
+        {% endif %}
+    </div>
+
+    <!-- 逆回购记录 -->
+    <div class="section">
+        <h2>逆回购记录</h2>
+        {% if repos %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>日期</th>
+                    <th>代码</th>
+                    <th>利率(%)</th>
+                    <th>金额</th>
+                    <th>到期日</th>
+                    <th>收益</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in repos %}
+                <tr>
+                    <td>{{ row['id'] }}</td>
+                    <td>{{ row['date'] }}</td>
+                    <td>{{ row['code'] }}</td>
+                    <td>{{ row['rate'] }}</td>
+                    <td>{{ row['amount'] }}</td>
+                    <td>{{ row['due_date'] }}</td>
+                    <td>{{ row['profit'] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty">暂无数据</p>
+        {% endif %}
+    </div>
+
+    <!-- 每日汇总 -->
+    <div class="section">
+        <h2>每日汇总</h2>
+        {% if summaries %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>日期</th>
+                    <th>策略类型</th>
+                    <th>收益</th>
+                    <th>操作日志</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in summaries %}
+                <tr>
+                    <td>{{ row['id'] }}</td>
+                    <td>{{ row['date'] }}</td>
+                    <td>{{ row['strategy_type'] }}</td>
+                    <td>{{ row['profit'] }}</td>
+                    <td>{{ row['action_log'] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty">暂无数据</p>
+        {% endif %}
+    </div>
+</body>
+</html>
