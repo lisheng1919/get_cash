@@ -1,10 +1,13 @@
 import logging
 import sqlite3
 import sys
+import threading
 from datetime import datetime
 from pathlib import Path
 
 from config_loader import load_config, validate_config
+from config_manager import ConfigManager
+from dashboard.app import create_app
 from data.models import init_db
 from data.storage import Storage
 from data.collector import DataCollector
@@ -249,6 +252,9 @@ def main():
     conn = setup_database(str(db_dir / "get_cash.db"))
     storage = Storage(conn)
 
+    # 初始化配置管理器
+    config_manager = ConfigManager(storage, scheduler=None, config_dict=config)
+
     # 初始化交易日历
     calendar = TradingCalendar()
     calendar.load_from_storage(storage)
@@ -272,6 +278,7 @@ def main():
     # 初始化调度器
     slow_threshold = config.get("system", {}).get("slow_threshold_ms", 30000)
     scheduler = StrategyScheduler(calendar, storage=storage, slow_threshold_ms=slow_threshold)
+    config_manager._scheduler = scheduler
 
     # 读取策略开关配置
     strategy_config = config.get("strategies", {})
@@ -305,6 +312,15 @@ def main():
     )
     # 注入数据采集器
     lof_premium._collector = collector
+
+    # 注册策略到配置管理器（支持热加载）
+    config_manager.register_strategy("bond_ipo", bond_ipo)
+    config_manager.register_strategy("reverse_repo", reverse_repo)
+    config_manager.register_strategy("bond_allocation", bond_alloc)
+    config_manager.register_strategy("lof_premium", lof_premium)
+
+    # 从yaml初始化配置到数据库（仅首次启动时执行）
+    config_manager.init_from_yaml()
 
     # 注册已启用的策略
     for name, strat in [
@@ -345,6 +361,18 @@ def main():
     # 注册心跳任务
     heartbeat_interval = config.get("system", {}).get("heartbeat_interval", 300)
     scheduler.add_heartbeat_job(heartbeat_interval)
+
+    # 添加配置轮询任务（每30秒检查重载信号）
+    scheduler.add_config_poll_job(config_manager, interval=30)
+
+    # 启动Flask看板线程
+    flask_app = create_app(storage=storage, config_manager=config_manager)
+    flask_thread = threading.Thread(
+        target=lambda: flask_app.run(host="0.0.0.0", port=5000, use_reloader=False),
+        daemon=True
+    )
+    flask_thread.start()
+    logger.info("Flask看板已启动于 http://0.0.0.0:5000")
 
     logger.info("系统启动完成")
     scheduler.start()
