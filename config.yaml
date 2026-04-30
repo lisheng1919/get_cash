@@ -38,7 +38,7 @@ reverse_repo:
 
 # LOF溢价监控配置
 lof_premium:
-  poll_interval: 5
+  poll_interval: 60
   random_delay_max: 3
   premium_threshold: 3.0
   low_precision_threshold: 3.0

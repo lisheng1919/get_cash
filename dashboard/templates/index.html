@@ -20,6 +20,39 @@
 <body>
     <h1>个人量化套利中枢</h1>
 
+    <!-- LOF溢价率监控 -->
+    <div class="section">
+        <h2>LOF溢价率监控</h2>
+        {% if premium_history %}
+        <table>
+            <thead>
+                <tr>
+                    <th>时间</th>
+                    <th>基金代码</th>
+                    <th>市价</th>
+                    <th>IOPV</th>
+                    <th>溢价率(%)</th>
+                    <th>IOPV来源</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in premium_history %}
+                <tr>
+                    <td>{{ row['timestamp'] }}</td>
+                    <td>{{ row['fund_code'] }}</td>
+                    <td>{{ row['price'] }}</td>
+                    <td>{{ row['iopv'] }}</td>
+                    <td>{{ "%.2f"|format(row['premium_rate']) }}</td>
+                    <td>{{ row['iopv_source'] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty">暂无数据</p>
+        {% endif %}
+    </div>
+
     <!-- LOF套利信号 -->
     <div class="section">
         <h2>LOF套利信号</h2>

@@ -177,14 +177,26 @@ class DataCollector:
 
     # ==================== LOF基金IOPV（净值） ====================
 
+    @staticmethod
+    def _strip_code_prefix(code: str) -> str:
+        """去掉基金代码的sz/sh前缀
+
+        Args:
+            code: 可能带前缀的基金代码，如 sz164906
+
+        Returns:
+            纯数字代码，如 164906
+        """
+        return code[2:] if len(code) > 2 and code[:2] in ("sz", "sh") else code
+
     def fetch_lof_iopv(self, codes: List[str]) -> Dict[str, Dict]:
         """获取LOF基金IOPV（净值近似值）
 
-        使用fund_value_estimation_em获取LOF基金估算净值作为IOPV。
-        缓存未命中时回退到逐只历史净值查询。
+        优先使用fund_value_estimation_em批量获取LOF估值，失败时回退逐只查询。
+        批量接口一次请求覆盖所有LOF基金，大幅减少网络请求数。
 
         Args:
-            codes: LOF基金代码列表
+            codes: LOF基金代码列表（可能含sz/sh前缀）
 
         Returns:
             字典，key为基金代码，value为 {"iopv": float, "iopv_source": "estimated"}
@@ -193,24 +205,39 @@ class DataCollector:
             return {}
 
         result = {}
-        # 尝试批量获取LOF估值数据
+        # 尝试批量获取LOF估值数据（一次请求覆盖所有LOF）
         try:
             import akshare as ak
             try:
                 est_df = ak.fund_value_estimation_em(symbol="LOF")
                 if est_df is not None and not est_df.empty:
+                    # akshare返回的估值列名含动态日期前缀，如 "2026-04-30-估值数据-估算值"
+                    # 需要按模式匹配找到估算值列
+                    est_col = None
+                    for col in est_df.columns:
+                        if "估算值" in str(col) and "单位净值" not in str(col):
+                            est_col = col
+                            break
+                    if est_col is None:
+                        logger.warning("未找到估值列，可用列: %s", list(est_df.columns))
+
+                    # 构建估值映射（纯数字代码 -> 估值）
                     est_map = {}
-                    for _, row in est_df.iterrows():
-                        est_code = str(row.get("基金代码", "")).strip()
-                        est_value = row.get("交易日-估算数据-估算值", 0)
-                        if est_code and est_value:
-                            try:
-                                est_map[est_code] = float(est_value)
-                            except (ValueError, TypeError):
-                                pass
+                    if est_col is not None:
+                        for _, row in est_df.iterrows():
+                            est_code = str(row.get("基金代码", "")).strip()
+                            est_value = row.get(est_col, 0)
+                            if est_code and est_value and str(est_value).strip() not in ("", "---", "--"):
+                                try:
+                                    est_map[est_code] = float(est_value)
+                                except (ValueError, TypeError):
+                                    pass
+
+                    # 匹配时去掉sz/sh前缀
                     for code in codes:
-                        if code in est_map:
-                            result[code] = {"iopv": est_map[code], "iopv_source": "estimated"}
+                        pure_code = self._strip_code_prefix(code)
+                        if pure_code in est_map:
+                            result[code] = {"iopv": est_map[pure_code], "iopv_source": "estimated"}
             except Exception as ex:
                 logger.warning("批量获取LOF估值失败，回退逐只查询: %s", ex)
         except ImportError:
@@ -220,18 +247,20 @@ class DataCollector:
         # 对未获取到估值的基金逐只查询历史净值
         missed_codes = [c for c in codes if c not in result]
         if missed_codes:
+            logger.debug("批量估值未覆盖%d只基金，逐只查询", len(missed_codes))
             try:
                 import akshare as ak
                 for code in missed_codes:
+                    pure_code = self._strip_code_prefix(code)
                     try:
-                        df = ak.fund_etf_hist_em(symbol=code, period="daily", adjust="qfq")
+                        df = ak.fund_etf_hist_em(symbol=pure_code, period="daily", adjust="qfq")
                         if df is not None and not df.empty:
                             latest = df.iloc[-1]
                             iopv = float(latest.get("收盘", 0))
                         else:
                             iopv = 0.0
                     except Exception as ex:
-                        logger.warning("获取基金%s IOPV失败: %s", code, ex)
+                        logger.debug("获取基金%s IOPV失败: %s", code, ex)
                         iopv = 0.0
                     result[code] = {"iopv": iopv, "iopv_source": "estimated"}
             except ImportError:

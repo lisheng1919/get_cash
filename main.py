@@ -34,7 +34,7 @@ def setup_database(db_path: str) -> sqlite3.Connection:
     Returns:
         已初始化的数据库连接
     """
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, check_same_thread=False)
     init_db(conn)
     return conn
 

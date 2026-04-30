@@ -75,7 +75,7 @@ class StrategyScheduler:
     def add_interval_job(self, strategy_name: str, seconds: int) -> None:
         """添加间隔执行任务
 
-        按固定秒数间隔执行策略。
+        按固定秒数间隔执行策略。上一轮未完成时跳过本轮，避免任务堆积。
 
         Args:
             strategy_name: 策略名称
@@ -95,6 +95,8 @@ class StrategyScheduler:
             _interval_wrapper,
             trigger=IntervalTrigger(seconds=seconds),
             name=f"interval_{strategy_name}",
+            max_instances=1,
+            coalesce=True,
         )
         logger.info("间隔任务已添加: %s, 每 %d 秒", strategy_name, seconds)
 

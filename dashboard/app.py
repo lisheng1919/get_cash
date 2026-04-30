@@ -21,6 +21,10 @@ def get_db():
 def index():
     """统一看板首页，展示各策略模块的最新数据"""
     conn = get_db()
+    # LOF溢价历史：最近20条（实时溢价率监控）
+    premium_history = conn.execute(
+        "SELECT * FROM premium_history ORDER BY timestamp DESC LIMIT 20"
+    ).fetchall()
     # LOF套利信号：最近20条
     signals = conn.execute(
         "SELECT * FROM trade_signal ORDER BY trigger_time DESC LIMIT 20"
@@ -44,6 +48,7 @@ def index():
     conn.close()
     return render_template(
         "index.html",
+        premium_history=premium_history,
         signals=signals,
         bond_ipos=bond_ipos,
         allocations=allocations,
