@@ -299,3 +299,63 @@ def test_upsert_and_get_system_status():
     # 不存在的key
     assert storage.get_system_status("nonexistent") is None
     conn.close()
+
+
+# ==================== LOF基金静默 ====================
+
+def test_mute_fund():
+    """测试设置基金静默"""
+    conn = _create_storage()
+    storage = Storage(conn)
+
+    # 先插入一个基金
+    storage.upsert_lof_fund("164906", "测试LOF", status="normal", is_suspended=False, daily_volume=1000.0)
+
+    # 设置静默
+    storage.mute_fund("164906", "2026-05-30 23:59:59", "暂停申购")
+
+    result = storage.get_lof_fund("164906")
+    assert result["status"] == "muted"
+    assert result["muted_until"] == "2026-05-30 23:59:59"
+    assert result["mute_reason"] == "暂停申购"
+    conn.close()
+
+
+def test_unmute_fund():
+    """测试解除基金静默"""
+    conn = _create_storage()
+    storage = Storage(conn)
+
+    storage.upsert_lof_fund("164906", "测试LOF", status="muted", is_suspended=False, daily_volume=1000.0)
+    storage.mute_fund("164906", "2026-05-30 23:59:59", "手动静默")
+
+    # 解除静默
+    storage.unmute_fund("164906")
+
+    result = storage.get_lof_fund("164906")
+    assert result["status"] == "normal"
+    assert result["muted_until"] == ""
+    assert result["mute_reason"] == ""
+    conn.close()
+
+
+def test_list_muted_funds():
+    """测试查询所有静默基金"""
+    conn = _create_storage()
+    storage = Storage(conn)
+
+    storage.upsert_lof_fund("164906", "LOF-A", status="normal", is_suspended=False, daily_volume=1000.0)
+    storage.upsert_lof_fund("501050", "LOF-B", status="normal", is_suspended=False, daily_volume=2000.0)
+    storage.upsert_lof_fund("162719", "LOF-C", status="normal", is_suspended=False, daily_volume=3000.0)
+
+    # 只静默两只
+    storage.mute_fund("164906", "2026-05-30 23:59:59", "暂停申购")
+    storage.mute_fund("501050", "2026-05-01 23:59:59", "套利利润不足(¥32)")
+
+    muted = storage.list_muted_funds()
+    assert len(muted) == 2
+    codes = [m["code"] for m in muted]
+    assert "164906" in codes
+    assert "501050" in codes
+    assert "162719" not in codes
+    conn.close()

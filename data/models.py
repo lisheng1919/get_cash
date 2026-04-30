@@ -13,6 +13,8 @@ DDL_STATEMENTS = [
         status TEXT NOT NULL DEFAULT 'normal',
         is_suspended INTEGER NOT NULL DEFAULT 0,
         daily_volume REAL NOT NULL DEFAULT 0.0,
+        muted_until TEXT NOT NULL DEFAULT '',
+        mute_reason TEXT NOT NULL DEFAULT '',
         updated_at TEXT NOT NULL DEFAULT '',
         PRIMARY KEY (code)
     )""",
@@ -195,6 +197,8 @@ def init_db(conn: sqlite3.Connection) -> None:
     for stmt in [
         "ALTER TABLE data_source_status ADD COLUMN last_failure_time TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE data_source_status ADD COLUMN failure_reason TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE lof_fund ADD COLUMN muted_until TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE lof_fund ADD COLUMN mute_reason TEXT NOT NULL DEFAULT ''",
     ]:
         try:
             cursor.execute(stmt)

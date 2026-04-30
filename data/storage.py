@@ -45,6 +45,41 @@ class Storage:
             return None
         return dict(row)
 
+    def mute_fund(self, code: str, muted_until: str, reason: str = "") -> None:
+        """设置基金静默状态
+
+        Args:
+            code: 基金代码
+            muted_until: 静默到期时间，格式 YYYY-MM-DD HH:MM:SS
+            reason: 静默原因
+        """
+        self._conn.execute(
+            """UPDATE lof_fund SET status='muted', muted_until=?, mute_reason=?
+               WHERE code=?""",
+            (muted_until, reason, code),
+        )
+        self._conn.commit()
+
+    def unmute_fund(self, code: str) -> None:
+        """解除基金静默状态，恢复正常
+
+        Args:
+            code: 基金代码
+        """
+        self._conn.execute(
+            """UPDATE lof_fund SET status='normal', muted_until='', mute_reason=''
+               WHERE code=?""",
+            (code,),
+        )
+        self._conn.commit()
+
+    def list_muted_funds(self) -> List[Dict]:
+        """查询所有静默中的基金"""
+        cursor = self._conn.execute(
+            "SELECT * FROM lof_fund WHERE status='muted'"
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
     # ==================== 溢价率历史 ====================
 
     def insert_premium_history(self, timestamp: str, fund_code: str,
