@@ -456,3 +456,110 @@ class Storage:
         )
         row = cursor.fetchone()
         return row["value"] if row else None
+
+    # ==================== 配置管理 ====================
+
+    def upsert_config_kv(self, category, section, key, value, value_type="string",
+                         label="", description=""):
+        """插入或更新配置项"""
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self._conn.execute(
+            """INSERT INTO config_kv (category, section, key, value, value_type, label, description, create_time, update_time)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(category, section, key) DO UPDATE SET
+                   value=excluded.value, value_type=excluded.value_type,
+                   label=excluded.label, description=excluded.description,
+                   update_time=excluded.update_time""",
+            (category, section, key, value, value_type, label, description, now, now)
+        )
+        self._conn.commit()
+
+    def get_config_kv(self, category, section, key):
+        """查询单个配置项"""
+        row = self._conn.execute(
+            "SELECT * FROM config_kv WHERE category=? AND section=? AND key=?",
+            (category, section, key)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def get_config_by_category(self, category):
+        """按分类查询配置项列表"""
+        rows = self._conn.execute(
+            "SELECT * FROM config_kv WHERE category=? ORDER BY section, key",
+            (category,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def batch_update_config(self, items):
+        """批量更新配置项"""
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        for item in items:
+            self._conn.execute(
+                """UPDATE config_kv SET value=?, update_time=? WHERE category=? AND section=? AND key=?""",
+                (item["value"], now, item["category"], item["section"], item["key"])
+            )
+        self._conn.commit()
+
+    # ==================== 分页查询 ====================
+
+    def query_paginated(self, table, page=1, page_size=20, search=None,
+                        search_columns=None, order_by="id", order_dir="DESC",
+                        extra_where=None, extra_params=None):
+        """通用分页查询"""
+        where_clauses = []
+        params = []
+
+        if extra_where:
+            where_clauses.append(extra_where)
+            if extra_params:
+                params.extend(extra_params)
+
+        if search and search_columns:
+            like_parts = " OR ".join([f"{col} LIKE ?" for col in search_columns])
+            where_clauses.append(f"({like_parts})")
+            params.extend([f"%{search}%"] * len(search_columns))
+
+        where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+        count_sql = f"SELECT COUNT(*) as cnt FROM {table}{where_sql}"
+        total = self._conn.execute(count_sql, params).fetchone()["cnt"]
+
+        offset = (page - 1) * page_size
+        query_sql = f"SELECT * FROM {table}{where_sql} ORDER BY {order_by} {order_dir} LIMIT ? OFFSET ?"
+        rows = self._conn.execute(query_sql, params + [page_size, offset]).fetchall()
+
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        return {
+            "items": [dict(r) for r in rows],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+        }
+
+    # ==================== 重载信号 ====================
+
+    def insert_reload_signal(self):
+        """插入配置重载信号"""
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor = self._conn.execute(
+            "INSERT INTO config_reload_signal (signal_time, processed) VALUES (?, 0)",
+            (now,)
+        )
+        self._conn.commit()
+        return cursor.lastrowid
+
+    def get_unprocessed_reload_signals(self):
+        """获取未处理的重载信号"""
+        rows = self._conn.execute(
+            "SELECT * FROM config_reload_signal WHERE processed=0 ORDER BY signal_time ASC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def mark_reload_signal_processed(self, signal_id):
+        """标记重载信号为已处理"""
+        self._conn.execute(
+            "UPDATE config_reload_signal SET processed=1 WHERE id=?",
+            (signal_id,)
+        )
+        self._conn.commit()
