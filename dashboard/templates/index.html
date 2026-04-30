@@ -35,6 +35,8 @@
         .bar-chart .bar { flex: 1; border-radius: 2px 2px 0 0; min-width: 8px; position: relative; }
         .bar-chart .bar .bar-label { position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%); font-size: 10px; color: #999; white-space: nowrap; }
         .refresh-info { text-align: right; font-size: 12px; color: #999; margin-bottom: 8px; }
+        .mute-btn, .unmute-btn { padding: 2px 8px; font-size: 12px; cursor: pointer; border: 1px solid #1890ff; background: #fff; color: #1890ff; border-radius: 3px; }
+        .mute-btn:hover, .unmute-btn:hover { background: #1890ff; color: #fff; }
     </style>
 </head>
 <body>
@@ -95,9 +97,17 @@
                 </table>
             </div>
         </div>
-    </div>
 
-    <!-- 业务数据 -->
+        <!-- 第四行：已静默基金 -->
+        <div class="section" id="muted-funds-section">
+            <h2>已静默基金</h2>
+            <table id="muted-funds-table">
+                <thead><tr><th>代码</th><th>名称</th><th>原因</th><th>到期时间</th><th>操作</th></tr></thead>
+                <tbody></tbody>
+            </table>
+            <p class="empty" id="muted-funds-empty" style="display:none">暂无静默基金</p>
+        </div>
+    </div>
     <div id="tab-data" class="tab-content">
         {% for section in data_sections %}
         <div class="section">
@@ -115,7 +125,7 @@
                     {% for row in section.rows %}
                     <tr>
                         {% for col in section.columns %}
-                        <td>{{ row[col] }}</td>
+                        <td>{{ row[col]|safe }}</td>
                         {% endfor %}
                     </tr>
                     {% endfor %}
@@ -250,6 +260,63 @@
 
     refreshStatus();
     setInterval(refreshStatus, 60000);
+
+    function refreshMutedFunds() {
+        fetch('/api/muted_funds').then(function(r) { return r.json(); }).then(function(data) {
+            var tbody = document.querySelector('#muted-funds-table tbody');
+            tbody.innerHTML = '';
+            if (data && data.length > 0) {
+                data.forEach(function(f) {
+                    tbody.innerHTML += '<tr><td>' + f.code + '</td><td>' + (f.name || '') +
+                        '</td><td>' + f.mute_reason + '</td><td>' + f.muted_until +
+                        '</td><td><button class="unmute-btn" data-code="' + f.code + '">解除</button></td></tr>';
+                });
+                document.getElementById('muted-funds-empty').style.display = 'none';
+            } else {
+                tbody.innerHTML = '';
+                document.getElementById('muted-funds-empty').style.display = 'block';
+            }
+            // 绑定解除按钮
+            document.querySelectorAll('.unmute-btn').forEach(function(btn) {
+                btn.onclick = function() { doUnmute(this.getAttribute('data-code')); };
+            });
+        });
+    }
+
+    function doMute(code) {
+        var days = prompt('静默天数:', '7');
+        if (days === null) return;
+        days = parseInt(days);
+        if (isNaN(days) || days <= 0) { alert('请输入有效天数'); return; }
+        fetch('/api/mute', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({fund_code: code, days: days})
+        }).then(function(r) { return r.json(); }).then(function(data) {
+            if (data.ok) { refreshMutedFunds(); }
+            else { alert('静默失败: ' + (data.error || '')); }
+        });
+    }
+
+    function doUnmute(code) {
+        if (!confirm('确认解除基金 ' + code + ' 的静默？')) return;
+        fetch('/api/unmute', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({fund_code: code})
+        }).then(function(r) { return r.json(); }).then(function(data) {
+            if (data.ok) { refreshMutedFunds(); }
+            else { alert('解除失败: ' + (data.error || '')); }
+        });
+    }
+
+    refreshMutedFunds();
+    setInterval(refreshMutedFunds, 60000);
+
+    // 初始化绑定业务数据tab中的静默按钮
+    document.querySelectorAll('.mute-btn').forEach(function(btn) {
+        btn.onclick = function() { doMute(this.getAttribute('data-code')); };
+    });
     </script>
 </body>
 </html>

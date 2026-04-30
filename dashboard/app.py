@@ -1,10 +1,11 @@
 """统一看板 Flask 应用"""
 
-from flask import Flask, render_template
+from flask import Flask, render_template, request, jsonify
 import sqlite3
 import os
 import json
 from datetime import datetime
+from data.storage import Storage
 
 app = Flask(__name__)
 
@@ -129,6 +130,66 @@ def api_status():
     }, ensure_ascii=False, default=str)
 
 
+@app.route("/api/mute", methods=["POST"])
+def api_mute():
+    """手动静默基金"""
+    data = request.get_json(force=True)
+    fund_code = data.get("fund_code", "")
+    days = data.get("days", 7)
+
+    if not fund_code:
+        return jsonify({"ok": False, "error": "fund_code必填"}), 400
+
+    conn = get_db()
+    storage = Storage(conn)
+    # 确保基金存在
+    fund = storage.get_lof_fund(fund_code)
+    if not fund:
+        conn.close()
+        return jsonify({"ok": False, "error": "基金不存在"}), 404
+
+    from datetime import timedelta
+    muted_until = (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    storage.mute_fund(fund_code, muted_until, "手动静默")
+    conn.close()
+    return jsonify({"ok": True, "muted_until": muted_until})
+
+
+@app.route("/api/unmute", methods=["POST"])
+def api_unmute():
+    """解除基金静默"""
+    data = request.get_json(force=True)
+    fund_code = data.get("fund_code", "")
+
+    if not fund_code:
+        return jsonify({"ok": False, "error": "fund_code必填"}), 400
+
+    conn = get_db()
+    storage = Storage(conn)
+    storage.unmute_fund(fund_code)
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/muted_funds")
+def api_muted_funds():
+    """获取所有静默中的基金列表"""
+    conn = get_db()
+    storage = Storage(conn)
+    muted = storage.list_muted_funds()
+    conn.close()
+    # 只返回关键字段
+    result = []
+    for f in muted:
+        result.append({
+            "code": f["code"],
+            "name": f["name"],
+            "mute_reason": f["mute_reason"],
+            "muted_until": f["muted_until"],
+        })
+    return jsonify(result)
+
+
 @app.route("/")
 def index():
     """统一看板首页"""
@@ -138,8 +199,8 @@ def index():
     data_sections = [
         {
             "title": "LOF溢价率监控",
-            "columns": ["timestamp", "fund_code", "price", "iopv", "premium_rate", "iopv_source"],
-            "rows": [dict(r) for r in conn.execute(
+            "columns": ["timestamp", "fund_code", "price", "iopv", "premium_rate", "iopv_source", "action"],
+            "rows": [dict(r, action='<button class="mute-btn" data-code="' + str(r["fund_code"]) + '">静默</button>') for r in conn.execute(
                 "SELECT * FROM premium_history ORDER BY timestamp DESC LIMIT 20"
             ).fetchall()],
         },
