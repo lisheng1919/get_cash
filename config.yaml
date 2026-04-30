@@ -46,6 +46,11 @@ lof_premium:
   confirm_count: 3
   cooldown_minutes: 5
   auto_trade: false
+  auto_mute_enabled: true
+  min_profit_yuan: 200
+  auto_mute_paused_days: 30
+  available_capital: 100000
+  sell_commission_rate: 0.0003
 
 # 底仓风控
 position:
