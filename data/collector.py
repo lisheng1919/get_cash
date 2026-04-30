@@ -160,6 +160,44 @@ class DataCollector:
             logger.error("akshare未安装，无法获取实时行情")
         return result
 
+    # ==================== LOF基金IOPV（净值） ====================
+
+    def fetch_lof_iopv(self, codes: List[str]) -> Dict[str, Dict]:
+        """获取LOF基金IOPV（净值近似值）
+
+        通过akshare获取基金最新净值作为IOPV的近似值。
+        数据精度为日级别，非实时，标记为estimated。
+
+        Args:
+            codes: LOF基金代码列表
+
+        Returns:
+            字典，key为基金代码，value为 {"iopv": float, "iopv_source": "estimated"}
+        """
+        if not codes:
+            return {}
+
+        result = {}
+        try:
+            import akshare as ak
+        except ImportError:
+            logger.error("akshare未安装，无法获取IOPV数据")
+            return {code: {"iopv": 0.0, "iopv_source": "estimated"} for code in codes}
+
+        for code in codes:
+            try:
+                df = ak.fund_etf_hist_em(symbol=code, period="daily", adjust="qfq")
+                if df is not None and not df.empty:
+                    latest = df.iloc[-1]
+                    iopv = float(latest.get("收盘", 0))
+                else:
+                    iopv = 0.0
+            except Exception as ex:
+                logger.warning("获取基金%s IOPV失败: %s", code, ex)
+                iopv = 0.0
+            result[code] = {"iopv": iopv, "iopv_source": "estimated"}
+        return result
+
     # ==================== 可转债申购 ====================
 
     def fetch_bond_ipo_list(self) -> List[Dict]:

@@ -132,3 +132,43 @@ def test_collector_both_fail_raises():
                 assert False, "应该抛出异常"
             except RuntimeError as ex:
                 assert "均失败" in str(ex)
+
+
+def test_fetch_lof_iopv_returns_iopv_data():
+    """fetch_lof_iopv应返回基金IOPV（净值）数据"""
+    import pandas as pd
+    from unittest.mock import patch
+
+    collector = _create_collector()
+
+    fake_df = pd.DataFrame({
+        "收盘": [1.025, 1.030],
+        "成交量": [5000, 6000],
+    })
+
+    with patch("akshare.fund_etf_hist_em", return_value=fake_df):
+        result = collector.fetch_lof_iopv(["164906"])
+
+    assert "164906" in result
+    assert result["164906"]["iopv"] == 1.030
+    assert result["164906"]["iopv_source"] == "estimated"
+
+
+def test_fetch_lof_iopv_empty_codes():
+    """空代码列表应返回空字典"""
+    collector = _create_collector()
+    result = collector.fetch_lof_iopv([])
+    assert result == {}
+
+
+def test_fetch_lof_iopv_failure_returns_zero():
+    """获取失败时应返回iopv为0"""
+    from unittest.mock import patch
+
+    collector = _create_collector()
+
+    with patch("akshare.fund_etf_hist_em", side_effect=Exception("网络错误")):
+        result = collector.fetch_lof_iopv(["164906"])
+
+    assert "164906" in result
+    assert result["164906"]["iopv"] == 0.0
