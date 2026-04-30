@@ -147,6 +147,26 @@ DDL_STATEMENTS = [
         value TEXT NOT NULL DEFAULT '',
         PRIMARY KEY (key)
     )""",
+    # 配置键值存储表
+    """CREATE TABLE IF NOT EXISTS config_kv (
+        category TEXT NOT NULL DEFAULT '',
+        section TEXT NOT NULL DEFAULT '',
+        key TEXT NOT NULL DEFAULT '',
+        value TEXT NOT NULL DEFAULT '',
+        value_type TEXT NOT NULL DEFAULT 'string',
+        label TEXT NOT NULL DEFAULT '',
+        description TEXT NOT NULL DEFAULT '',
+        create_time TEXT NOT NULL DEFAULT '',
+        update_time TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (category, section, key)
+    )""",
+    # 配置重载信号表（跨进程通信）
+    """CREATE TABLE IF NOT EXISTS config_reload_signal (
+        id INTEGER NOT NULL,
+        signal_time TEXT NOT NULL DEFAULT '',
+        processed INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (id AUTOINCREMENT)
+    )""",
 ]
 
 # 索引定义
@@ -159,6 +179,8 @@ INDEX_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_execution_log_time ON strategy_execution_log(trigger_time)",
     "CREATE INDEX IF NOT EXISTS idx_alert_event_time ON alert_event(timestamp)",
     "CREATE INDEX IF NOT EXISTS idx_notification_log_time ON notification_log(timestamp)",
+    "CREATE INDEX IF NOT EXISTS idx_config_kv_category ON config_kv(category)",
+    "CREATE INDEX IF NOT EXISTS idx_config_reload_unprocessed ON config_reload_signal(processed)",
 ]
 
 # 所有表名列表
@@ -177,6 +199,8 @@ TABLE_NAMES = [
     "alert_event",
     "notification_log",
     "system_status",
+    "config_kv",
+    "config_reload_signal",
 ]
 
 
