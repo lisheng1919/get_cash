@@ -4,7 +4,7 @@ import sqlite3
 from datetime import datetime
 
 
-# 10张表的DDL定义
+# 14张表的DDL定义
 DDL_STATEMENTS = [
     # LOF基金基础信息表
     """CREATE TABLE IF NOT EXISTS lof_fund (
@@ -98,13 +98,52 @@ DDL_STATEMENTS = [
         action_log TEXT NOT NULL DEFAULT '',
         PRIMARY KEY (id AUTOINCREMENT)
     )""",
-    # 数据源状态表
+    # 数据源状态表（扩展：增加失败时间和失败原因）
     """CREATE TABLE IF NOT EXISTS data_source_status (
         name TEXT NOT NULL DEFAULT '',
         status TEXT NOT NULL DEFAULT 'unknown',
         last_success_time TEXT NOT NULL DEFAULT '',
         consecutive_failures INTEGER NOT NULL DEFAULT 0,
+        last_failure_time TEXT NOT NULL DEFAULT '',
+        failure_reason TEXT NOT NULL DEFAULT '',
         PRIMARY KEY (name)
+    )""",
+    # 策略执行日志表
+    """CREATE TABLE IF NOT EXISTS strategy_execution_log (
+        id INTEGER NOT NULL,
+        strategy_name TEXT NOT NULL DEFAULT '',
+        trigger_time TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'success',
+        duration_ms INTEGER NOT NULL DEFAULT 0,
+        error_message TEXT NOT NULL DEFAULT '',
+        record_time TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (id AUTOINCREMENT)
+    )""",
+    # 告警事件表
+    """CREATE TABLE IF NOT EXISTS alert_event (
+        id INTEGER NOT NULL,
+        level TEXT NOT NULL DEFAULT 'INFO',
+        source TEXT NOT NULL DEFAULT '',
+        message TEXT NOT NULL DEFAULT '',
+        timestamp TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (id AUTOINCREMENT)
+    )""",
+    # 通知发送记录表
+    """CREATE TABLE IF NOT EXISTS notification_log (
+        id INTEGER NOT NULL,
+        channel TEXT NOT NULL DEFAULT '',
+        event_type TEXT NOT NULL DEFAULT '',
+        title TEXT NOT NULL DEFAULT '',
+        message TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'success',
+        timestamp TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (id AUTOINCREMENT)
+    )""",
+    # 系统状态KV表
+    """CREATE TABLE IF NOT EXISTS system_status (
+        key TEXT NOT NULL DEFAULT '',
+        value TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (key)
     )""",
 ]
 
@@ -114,6 +153,10 @@ INDEX_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_premium_history_ts ON premium_history(timestamp)",
     "CREATE INDEX IF NOT EXISTS idx_trade_signal_code ON trade_signal(fund_code)",
     "CREATE INDEX IF NOT EXISTS idx_holiday_date ON holiday_calendar(date)",
+    "CREATE INDEX IF NOT EXISTS idx_execution_log_strategy ON strategy_execution_log(strategy_name)",
+    "CREATE INDEX IF NOT EXISTS idx_execution_log_time ON strategy_execution_log(trigger_time)",
+    "CREATE INDEX IF NOT EXISTS idx_alert_event_time ON alert_event(timestamp)",
+    "CREATE INDEX IF NOT EXISTS idx_notification_log_time ON notification_log(timestamp)",
 ]
 
 # 所有表名列表
@@ -128,6 +171,10 @@ TABLE_NAMES = [
     "holiday_calendar",
     "daily_summary",
     "data_source_status",
+    "strategy_execution_log",
+    "alert_event",
+    "notification_log",
+    "system_status",
 ]
 
 
@@ -144,4 +191,13 @@ def init_db(conn: sqlite3.Connection) -> None:
     # 创建所有索引
     for idx_sql in INDEX_STATEMENTS:
         cursor.execute(idx_sql)
+    # 兼容已有数据库：尝试添加新字段
+    for stmt in [
+        "ALTER TABLE data_source_status ADD COLUMN last_failure_time TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE data_source_status ADD COLUMN failure_reason TEXT NOT NULL DEFAULT ''",
+    ]:
+        try:
+            cursor.execute(stmt)
+        except Exception:
+            pass  # 字段已存在则忽略
     conn.commit()
