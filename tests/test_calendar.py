@@ -55,9 +55,11 @@ def test_sync_from_akshare_populates_holidays():
     storage = Storage(conn)
     cal = TradingCalendar()
 
+    # 5月1日(周五)和5月4日(周一)为非交易日，形成>=2个非交易工作日
+    # 4月30日(周四)后：5/1(周五,非交易)=1, 5/2-3(周末跳过), 5/4(周一,非交易)=2 → 节前
     fake_trade_dates = [
         "2026-04-27", "2026-04-28", "2026-04-29", "2026-04-30",
-        "2026-05-04", "2026-05-05",
+        "2026-05-05", "2026-05-06",
     ]
 
     with patch("akshare.tool_trade_date_hist_sina") as mock_fn:
@@ -68,7 +70,7 @@ def test_sync_from_akshare_populates_holidays():
 
 
 def test_sync_from_akshare_detects_pre_holiday():
-    """sync_from_akshare应检测节前交易日"""
+    """sync_from_akshare应检测节前交易日（>=2个非交易工作日）"""
     import sqlite3
     from unittest.mock import patch
     import pandas as pd
@@ -80,9 +82,11 @@ def test_sync_from_akshare_detects_pre_holiday():
     storage = Storage(conn)
     cal = TradingCalendar()
 
+    # 5月1日(周五)和5月4日(周一)为非交易日，形成>=2个非交易工作日
+    # 4月30日(周四)后：5/1(周五,非交易)=1, 5/2-3(周末跳过), 5/4(周一,非交易)=2 → 节前
     fake_trade_dates = [
         "2026-04-27", "2026-04-28", "2026-04-29", "2026-04-30",
-        "2026-05-04", "2026-05-05",
+        "2026-05-05", "2026-05-06",
     ]
 
     with patch("akshare.tool_trade_date_hist_sina") as mock_fn:
@@ -90,6 +94,35 @@ def test_sync_from_akshare_detects_pre_holiday():
         cal.sync_from_akshare(storage)
 
     assert cal.is_pre_holiday(date(2026, 4, 30)) is True
+
+
+def test_normal_friday_not_pre_holiday():
+    """正常周五（仅周末间隔）不应被标记为节前"""
+    import sqlite3
+    from unittest.mock import patch
+    import pandas as pd
+    from data.models import init_db
+    from data.storage import Storage
+
+    conn = sqlite3.connect(":memory:")
+    init_db(conn)
+    storage = Storage(conn)
+    cal = TradingCalendar()
+
+    # 正常工作周：周一到周五连续交易日，无节假日
+    # 周五后仅周末(5/2-3)，无非交易工作日 → 不是节前
+    fake_trade_dates = [
+        "2026-04-27", "2026-04-28", "2026-04-29", "2026-04-30", "2026-05-01",
+        "2026-05-04", "2026-05-05", "2026-05-06", "2026-05-07", "2026-05-08",
+    ]
+
+    with patch("akshare.tool_trade_date_hist_sina") as mock_fn:
+        mock_fn.return_value = pd.DataFrame({"trade_date": fake_trade_dates})
+        cal.sync_from_akshare(storage)
+
+    # 5月1日(周五)是正常交易日，下一个交易日是5月4日(周一)
+    # 中间仅周末，0个非交易工作日 → 不是节前
+    assert cal.is_pre_holiday(date(2026, 5, 1)) is False
 
 
 def test_infer_holiday_name():

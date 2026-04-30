@@ -220,29 +220,47 @@ class TradingCalendar:
                 non_trading_dates.add(current)
             current += timedelta(days=1)
 
-        # 推断节前交易日：交易日后面到下一个交易日之间的日历天数>=3
-        # （正常周末间隔为2天，超过2天即为长假，当前交易日为节前）
+        # 推断节前交易日：交易日之后有>=2个非交易工作日（不含周末）
+        # 正常周五→周一间隔3天但非交易工作日为0，不算节前；
+        # 只有长假（如春节连休）才会在工作日上有>=2天非交易日
         pre_holiday_dates = {}
         for td in trade_dates:
             if td < min_date or td > max_date:
                 continue
-            # 查找下一个交易日
-            next_day = td + timedelta(days=1)
-            calendar_gap = 0
-            check_day = next_day
-            while check_day <= max_date:
-                calendar_gap += 1
-                if check_day in trade_dates:
+            # 从下一个工作日开始，统计非交易工作日数量
+            non_trading_weekdays = 0
+            next_trade_day = None
+            check_day = td + timedelta(days=1)
+            # 最多往后看30天，防止无限循环
+            for _ in range(30):
+                if check_day > max_date:
                     break
+                # 周末不计入非交易工作日，直接跳过
+                if check_day.weekday() >= 5:
+                    check_day += timedelta(days=1)
+                    continue
+                # 遇到交易日则停止
+                if check_day in trade_dates:
+                    next_trade_day = check_day
+                    break
+                # 工作日且非交易日，计数+1
+                non_trading_weekdays += 1
                 check_day += timedelta(days=1)
-            # 日历间隔>=3天（超过正常周末2天），则当前交易日为节前
-            if calendar_gap >= 3:
+            # 非交易工作日>=2天，则当前交易日为节前
+            if non_trading_weekdays >= 2:
                 # 查找最近的节假日名称（从后续非交易日中取月份）
                 holiday_name = ""
-                for gap_day in non_trading_dates:
-                    if gap_day > td and gap_day < check_day:
-                        holiday_name = self._infer_holiday_name(gap_day.month)
-                        break
+                if next_trade_day is not None:
+                    for gap_day in non_trading_dates:
+                        if gap_day > td and gap_day < next_trade_day:
+                            holiday_name = self._infer_holiday_name(gap_day.month)
+                            break
+                else:
+                    # 未找到下一个交易日时，从非交易日中取最近的一个
+                    for gap_day in sorted(non_trading_dates):
+                        if gap_day > td:
+                            holiday_name = self._infer_holiday_name(gap_day.month)
+                            break
                 pre_holiday_dates[td] = holiday_name
 
         # 写入数据库：交易日
