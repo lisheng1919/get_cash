@@ -225,33 +225,34 @@ def test_fetch_lof_purchase_status():
 
     collector = _create_collector()
 
-    # 构造fund_purchase_em()的返回数据
+    # 构造fund_purchase_em()的返回数据（使用实际API的列名）
     fake_df = pd.DataFrame({
-        "基金代码": ["164906", "501050", "162719", "110001"],
-        "基金简称": ["LOF-A", "LOF-B", "LOF-C", "非LOF基金"],
-        "基金类型": ["LOF", "LOF", "LOF", "股票型"],
-        "申购状态": ["正常申购", "限大额", "暂停申购", "正常申购"],
-        "赎回状态": ["正常赎回", "正常赎回", "正常赎回", "正常赎回"],
-        "申购累计限额": [0, 20000, 0, 0],
-        "购买费率": ["0.15%", "0.12%", "0.15%", "1.50%"],
+        "基金代码": ["164906", "501050", "162719", "510001"],
+        "基金简称": ["某某LOF-A", "某某LOF-B", "某某LOF-C", "某某股票基金"],
+        "基金类型": ["指数型-股票", "指数型-股票", "指数型-海外股票", "股票型"],
+        "申购状态": ["开放申购", "限大额", "暂停申购", "开放申购"],
+        "赎回状态": ["开放赎回", "开放赎回", "开放赎回", "开放赎回"],
+        "日累计限定金额": [0, 20000, 0, 0],
+        "手续费": [0.15, 0.12, 0.15, 1.50],
     })
 
     with patch("akshare.fund_purchase_em", return_value=fake_df, create=True):
         result = collector.fetch_lof_purchase_status()
 
-    # 只应返回LOF类型基金
-    assert "164906" in result
-    assert "501050" in result
-    assert "162719" in result
-    assert "110001" not in result  # 非LOF
+    # 只应返回基金简称含LOF的基金，key带市场前缀
+    assert "sz164906" in result
+    assert "sh501050" in result
+    assert "sz162719" in result
+    assert "510001" not in result  # 简称不含LOF
+    assert "sh510001" not in result
 
     # 验证数据格式
-    assert result["164906"]["purchase_status"] == "正常申购"
-    assert result["164906"]["purchase_limit"] == 0
-    assert result["164906"]["purchase_fee_rate"] == 0.0015
+    assert result["sz164906"]["purchase_status"] == "开放申购"
+    assert result["sz164906"]["purchase_limit"] == 0
+    assert result["sz164906"]["purchase_fee_rate"] == 0.0015
 
-    assert result["501050"]["purchase_status"] == "限大额"
-    assert result["501050"]["purchase_limit"] == 20000
+    assert result["sh501050"]["purchase_status"] == "限大额"
+    assert result["sh501050"]["purchase_limit"] == 20000
 
-    assert result["162719"]["purchase_status"] == "暂停申购"
-    assert result["162719"]["purchase_limit"] == 0
+    assert result["sz162719"]["purchase_status"] == "暂停申购"
+    assert result["sz162719"]["purchase_limit"] == 0

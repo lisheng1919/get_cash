@@ -217,6 +217,25 @@ class DataCollector:
         """
         return code[2:] if len(code) > 2 and code[:2] in ("sz", "sh") else code
 
+    @staticmethod
+    def _add_market_prefix(code: str) -> str:
+        """给纯数字基金代码加上市场前缀
+
+        Args:
+            code: 纯数字基金代码，如 161128
+
+        Returns:
+            带前缀的基金代码，如 sz161128
+        """
+        # 已有前缀则直接返回
+        if len(code) > 2 and code[:2] in ("sz", "sh"):
+            return code
+        if code.startswith("16") or code.startswith("15") or code.startswith("18"):
+            return "sz" + code
+        if code.startswith("50") or code.startswith("51") or code.startswith("52"):
+            return "sh" + code
+        return code
+
     def fetch_lof_iopv(self, codes: List[str]) -> Dict[str, Dict]:
         """获取LOF基金IOPV（净值近似值）
 
@@ -306,14 +325,15 @@ class DataCollector:
         """获取LOF基金申购状态信息
 
         调用akshare的fund_purchase_em接口获取全市场基金申购信息，
-        筛选LOF基金，返回每只LOF的申购状态、限额和费率。
+        通过基金简称包含"LOF"识别LOF基金，返回申购状态、限额和费率。
+        key为带市场前缀的基金代码（如sz161128），与fetch_lof_fund_list一致。
 
         Returns:
-            字典，key为纯数字基金代码，value为申购信息字典：
+            字典，key为带前缀基金代码，value为申购信息字典：
             {
-                "purchase_status": "正常申购" | "限大额" | "暂停申购",
-                "purchase_limit": float,  # 申购累计限额（元），0表示无限制
-                "purchase_fee_rate": float,  # 申购费率（小数）
+                "purchase_status": "开放申购" | "限大额" | "暂停申购",
+                "purchase_limit": float,  # 日累计限定金额（元），0表示无限制
+                "purchase_fee_rate": float,  # 申购费率（小数，如0.0012）
             }
         """
         try:
@@ -323,33 +343,37 @@ class DataCollector:
                 logger.warning("fund_purchase_em返回空数据")
                 return {}
 
-            result = {}
-            for _, row in df.iterrows():
-                # 只筛选LOF基金
-                fund_type = str(row.get("基金类型", "")).strip()
-                if fund_type != "LOF":
-                    continue
+            # 通过基金简称包含"LOF"筛选LOF基金
+            lof_mask = df["基金简称"].astype(str).str.contains("LOF", case=False)
+            lof_df = df[lof_mask]
 
+            result = {}
+            for _, row in lof_df.iterrows():
                 code = str(row.get("基金代码", "")).strip()
                 if not code:
                     continue
 
+                # 加上市场前缀，与fetch_lof_fund_list保持一致
+                code_with_prefix = self._add_market_prefix(code)
+                fund_name = str(row.get("基金简称", "")).strip()
+
                 purchase_status = str(row.get("申购状态", "")).strip()
-                # 申购累计限额
-                limit_val = row.get("申购累计限额", 0)
+                # 日累计限定金额（元）
+                limit_val = row.get("日累计限定金额", 0)
                 try:
                     purchase_limit = float(limit_val) if limit_val else 0.0
                 except (ValueError, TypeError):
                     purchase_limit = 0.0
 
-                # 购买费率，如"0.15%"转为0.0015
-                fee_str = str(row.get("购买费率", "0")).strip().replace("%", "")
+                # 手续费，如0.15转为0.0015
+                fee_val = row.get("手续费", 0)
                 try:
-                    purchase_fee_rate = float(fee_str) / 100.0 if fee_str else 0.0
+                    purchase_fee_rate = float(fee_val) / 100.0 if fee_val is not None else 0.0
                 except (ValueError, TypeError):
                     purchase_fee_rate = 0.0
 
-                result[code] = {
+                result[code_with_prefix] = {
+                    "fund_name": fund_name,
                     "purchase_status": purchase_status,
                     "purchase_limit": purchase_limit,
                     "purchase_fee_rate": purchase_fee_rate,

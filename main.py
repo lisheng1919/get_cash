@@ -186,6 +186,8 @@ def auto_mute_funds(config: dict, storage: Storage, collector: DataCollector) ->
     profit_muted = 0
 
     for code, info in purchase_status.items():
+        fund_name = info.get("fund_name", "")
+
         # 检查是否已有手动静默（不覆盖）
         existing = storage.get_lof_fund(code)
         if existing and existing.get("status") == "muted":
@@ -201,7 +203,7 @@ def auto_mute_funds(config: dict, storage: Storage, collector: DataCollector) ->
         if info["purchase_status"] == "暂停申购":
             # 先确保基金存在于lof_fund表
             if not existing:
-                storage.upsert_lof_fund(code, "", status="normal", is_suspended=False, daily_volume=0.0)
+                storage.upsert_lof_fund(code, fund_name, status="normal", is_suspended=False, daily_volume=0.0)
             muted_until = (now + timedelta(days=auto_mute_paused_days)).strftime("%Y-%m-%d %H:%M:%S")
             storage.mute_fund(code, muted_until, "暂停申购")
             paused_muted += 1
@@ -226,7 +228,7 @@ def auto_mute_funds(config: dict, storage: Storage, collector: DataCollector) ->
 
             if net_profit < min_profit_yuan:
                 if not existing:
-                    storage.upsert_lof_fund(code, "", status="normal", is_suspended=False, daily_volume=0.0)
+                    storage.upsert_lof_fund(code, fund_name, status="normal", is_suspended=False, daily_volume=0.0)
                 # 限大额静默到当天结束
                 today_end = now.strftime("%Y-%m-%d") + " 23:59:59"
                 storage.mute_fund(code, today_end, "套利利润不足(¥%.0f)" % net_profit)
