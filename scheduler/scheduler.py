@@ -1,6 +1,7 @@
 """策略调度器，基于 APScheduler 实现定时任务管理"""
 
 import logging
+import time
 from datetime import date
 
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -20,14 +21,18 @@ class StrategyScheduler:
     每日任务自动判断是否为交易日，非交易日跳过执行。
     """
 
-    def __init__(self, calendar: TradingCalendar):
+    def __init__(self, calendar: TradingCalendar, storage=None, slow_threshold_ms: int = 30000):
         """初始化调度器
 
         Args:
             calendar: 交易日历实例，用于判断是否为交易日
+            storage: 数据存储实例，用于记录执行日志和告警事件
+            slow_threshold_ms: 慢执行阈值（毫秒），超过则产生告警
         """
         self._scheduler = BlockingScheduler()
         self._calendar = calendar
+        self._storage = storage
+        self._slow_threshold_ms = slow_threshold_ms
         self._strategies = {}  # type: dict[str, BaseStrategy]
         self._heartbeat_interval = 300  # 默认5分钟
 
@@ -56,14 +61,31 @@ class StrategyScheduler:
         """
         strategy = self._get_strategy(strategy_name)
 
-        # 包装函数：先判断交易日，再执行策略
+        # 包装函数：先判断交易日，再执行策略，记录执行日志和告警
         def _daily_wrapper():
             today = date.today()
             if not self._calendar.is_trading_day(today):
                 logger.info("非交易日，跳过策略 [%s] 执行: %s", strategy_name, today)
+                if self._storage:
+                    self._storage.insert_execution_log(strategy_name, "skip", 0, "非交易日")
                 return
             logger.info("交易日，执行策略 [%s]: %s", strategy_name, today)
-            strategy.execute()
+            start = time.perf_counter()
+            try:
+                strategy.execute()
+                duration = int((time.perf_counter() - start) * 1000)
+                if self._storage:
+                    self._storage.insert_execution_log(strategy_name, "success", duration)
+            except Exception as ex:
+                duration = int((time.perf_counter() - start) * 1000)
+                if self._storage:
+                    self._storage.insert_execution_log(strategy_name, "fail", duration, str(ex)[:500])
+                    self._storage.insert_alert_event("ERROR", strategy_name,
+                                                     "策略执行失败: %s" % str(ex)[:200])
+            if self._storage and duration > self._slow_threshold_ms:
+                self._storage.insert_alert_event(
+                    "WARN", strategy_name,
+                    "策略执行耗时%dms超过阈值%dms" % (duration, self._slow_threshold_ms))
 
         self._scheduler.add_job(
             _daily_wrapper,
@@ -86,10 +108,25 @@ class StrategyScheduler:
         """
         strategy = self._get_strategy(strategy_name)
 
-        # 包装函数：执行策略
+        # 包装函数：执行策略，记录执行日志和告警
         def _interval_wrapper():
             logger.info("间隔触发策略 [%s]", strategy_name)
-            strategy.execute()
+            start = time.perf_counter()
+            try:
+                strategy.execute()
+                duration = int((time.perf_counter() - start) * 1000)
+                if self._storage:
+                    self._storage.insert_execution_log(strategy_name, "success", duration)
+            except Exception as ex:
+                duration = int((time.perf_counter() - start) * 1000)
+                if self._storage:
+                    self._storage.insert_execution_log(strategy_name, "fail", duration, str(ex)[:500])
+                    self._storage.insert_alert_event("ERROR", strategy_name,
+                                                     "策略执行失败: %s" % str(ex)[:200])
+            if self._storage and duration > self._slow_threshold_ms:
+                self._storage.insert_alert_event(
+                    "WARN", strategy_name,
+                    "策略执行耗时%dms超过阈值%dms" % (duration, self._slow_threshold_ms))
 
         self._scheduler.add_job(
             _interval_wrapper,
@@ -110,10 +147,21 @@ class StrategyScheduler:
         strategy_names = list(self._strategies.keys())
 
         def _heartbeat():
-            logger.info(
-                "系统心跳：正常运行中，已注册策略: %s",
-                strategy_names,
-            )
+            if self._storage:
+                ds_status = self._storage.list_all_data_source_status()
+                unhealthy = [s for s in ds_status if s["status"] != "ok"]
+                if unhealthy:
+                    self._storage.insert_alert_event(
+                        "WARN", "heartbeat",
+                        "数据源异常: %s" % ", ".join(s["name"] for s in unhealthy))
+                else:
+                    self._storage.insert_alert_event("INFO", "heartbeat", "系统正常运行，数据源全部OK")
+                logger.info("系统心跳：数据源 %d/%d OK，已注册策略: %s",
+                            len(ds_status) - len(unhealthy), len(ds_status),
+                            list(self._strategies.keys()))
+            else:
+                logger.info("系统心跳：正常运行中，已注册策略: %s",
+                            list(self._strategies.keys()))
 
         self._scheduler.add_job(
             _heartbeat,
