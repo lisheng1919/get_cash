@@ -12,6 +12,7 @@ from scheduler.scheduler import StrategyScheduler
 from strategies.bond_ipo import BondIpoStrategy
 from strategies.reverse_repo import ReverseRepoStrategy
 from strategies.bond_allocation import BondAllocationStrategy
+from strategies.lof_premium.strategy import LofPremiumStrategy
 from notify.base import NotificationManager
 from notify.desktop import DesktopNotifier
 from notify.wechat import WechatNotifier
@@ -194,11 +195,20 @@ def main():
         storage, notifier,
     )
 
+    # 创建LOF溢价策略实例
+    lof_premium = LofPremiumStrategy(
+        config.get("lof_premium", {}),
+        storage, notifier,
+    )
+    # 注入数据采集器
+    lof_premium._collector = collector
+
     # 注册已启用的策略
     for name, strat in [
         ("bond_ipo", bond_ipo),
         ("reverse_repo", reverse_repo),
         ("bond_allocation", bond_alloc),
+        ("lof_premium", lof_premium),
     ]:
         if strategy_config.get(name, {}).get("enabled", True):
             scheduler.register(strat)
@@ -207,6 +217,11 @@ def main():
     scheduler.add_daily_job("bond_ipo", 9, 30)
     scheduler.add_daily_job("reverse_repo", 14, 30)
     scheduler.add_daily_job("bond_allocation", 9, 0)
+
+    # LOF溢价策略使用间隔轮询
+    lof_premium_interval = config.get("lof_premium", {}).get("poll_interval", 5)
+    if strategy_config.get("lof_premium", {}).get("enabled", True):
+        scheduler.add_interval_job("lof_premium", lof_premium_interval)
 
     # 启动自检
     if config.get("system", {}).get("startup_selfcheck", True):

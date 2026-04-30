@@ -45,6 +45,7 @@ lof_premium:
   min_volume: 500
   confirm_count: 3
   cooldown_minutes: 5
+  auto_trade: false
 
 # 底仓风控
 position:
