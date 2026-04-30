@@ -149,6 +149,92 @@ def run_selfcheck(config: dict, storage: Storage, collector: DataCollector) -> N
     logger.info("===== 自检完成 =====")
 
 
+def auto_mute_funds(config: dict, storage: Storage, collector: DataCollector) -> None:
+    """系统启动时自动静默无法申购或无套利空间的LOF基金
+
+    Args:
+        config: 完整配置字典
+        storage: 数据存储实例
+        collector: 数据采集器实例
+    """
+    lof_config = config.get("lof_premium", {})
+    if not lof_config.get("auto_mute_enabled", True):
+        logger.info("自动静默功能未启用，跳过")
+        return
+
+    # 获取申购状态
+    try:
+        purchase_status = collector.fetch_lof_purchase_status()
+    except Exception as ex:
+        logger.error("获取LOF申购状态失败，跳过自动静默: %s", ex)
+        return
+
+    if not purchase_status:
+        logger.info("无LOF申购状态数据，跳过自动静默")
+        return
+
+    from datetime import timedelta
+
+    auto_mute_paused_days = lof_config.get("auto_mute_paused_days", 30)
+    min_profit_yuan = lof_config.get("min_profit_yuan", 200)
+    available_capital = lof_config.get("available_capital", 100000)
+    sell_commission_rate = lof_config.get("sell_commission_rate", 0.0003)
+
+    now = datetime.now()
+    now_str = now.strftime("%Y-%m-%d %H:%M:%S")
+    paused_muted = 0
+    profit_muted = 0
+
+    for code, info in purchase_status.items():
+        # 检查是否已有手动静默（不覆盖）
+        existing = storage.get_lof_fund(code)
+        if existing and existing.get("status") == "muted":
+            reason = existing.get("mute_reason", "")
+            if reason.startswith("手动静默"):
+                continue
+            # 已静默且未到期，不重复处理
+            muted_until = existing.get("muted_until", "")
+            if muted_until and muted_until > now_str:
+                continue
+
+        # 规则1：暂停申购 → 静默30天
+        if info["purchase_status"] == "暂停申购":
+            # 先确保基金存在于lof_fund表
+            if not existing:
+                storage.upsert_lof_fund(code, "", status="normal", is_suspended=False, daily_volume=0.0)
+            muted_until = (now + timedelta(days=auto_mute_paused_days)).strftime("%Y-%m-%d %H:%M:%S")
+            storage.mute_fund(code, muted_until, "暂停申购")
+            paused_muted += 1
+            continue
+
+        # 规则2：限大额 → 计算套利利润
+        if info["purchase_status"] == "限大额" and info["purchase_limit"] > 0:
+            # 获取最近溢价率
+            premium_rate = 3.0  # 默认假设值
+            if existing:
+                history = storage.get_premium_history(code, limit=1)
+                if history:
+                    premium_rate = abs(history[0].get("premium_rate", 3.0))
+
+            net_profit = LofPremiumStrategy.calculate_arbitrage_profit(
+                premium_rate=premium_rate,
+                purchase_limit=info["purchase_limit"],
+                available_capital=available_capital,
+                purchase_fee_rate=info["purchase_fee_rate"],
+                sell_commission_rate=sell_commission_rate,
+            )
+
+            if net_profit < min_profit_yuan:
+                if not existing:
+                    storage.upsert_lof_fund(code, "", status="normal", is_suspended=False, daily_volume=0.0)
+                # 限大额静默到当天结束
+                today_end = now.strftime("%Y-%m-%d") + " 23:59:59"
+                storage.mute_fund(code, today_end, "套利利润不足(¥%.0f)" % net_profit)
+                profit_muted += 1
+
+    logger.info("自动静默完成: 暂停申购%d只, 利润不足%d只", paused_muted, profit_muted)
+
+
 def main():
     """系统主入口：加载配置、初始化各模块、注册策略并启动调度器"""
     # 加载配置
@@ -246,6 +332,9 @@ def main():
         ("bond_allocation", bond_alloc), ("lof_premium", lof_premium),
     ] if strategy_config.get(name, {}).get("enabled", True)]
     storage.insert_alert_event("INFO", "system", "系统启动，策略: %s" % ", ".join(strategy_names))
+
+    # 自动静默无法申购的LOF基金
+    auto_mute_funds(config, storage, collector)
 
     # 启动自检
     if config.get("system", {}).get("startup_selfcheck", True):
