@@ -170,6 +170,48 @@ class StrategyScheduler:
         )
         logger.info("心跳任务已添加，间隔 %d 秒", self._heartbeat_interval)
 
+    def remove_job(self, strategy_name):
+        """移除策略的调度job"""
+        job_names = [f"daily_{strategy_name}", f"interval_{strategy_name}"]
+        for job_name in job_names:
+            try:
+                self._scheduler.remove_job(job_name)
+                logger.info("已移除调度job: %s", job_name)
+            except Exception:
+                pass  # job不存在则忽略
+
+    def modify_interval_job(self, strategy_name, seconds):
+        """修改间隔job的触发间隔"""
+        job_name = f"interval_{strategy_name}"
+        try:
+            from apscheduler.triggers.interval import IntervalTrigger
+            self._scheduler.reschedule_job(job_name, trigger=IntervalTrigger(seconds=seconds))
+            logger.info("已修改job %s 间隔为 %ds", job_name, seconds)
+        except Exception:
+            logger.warning("修改job %s 失败，尝试重建", job_name)
+            self.remove_job(strategy_name)
+            if strategy_name in self._strategies:
+                strategy = self._strategies[strategy_name]
+                if strategy.is_enabled():
+                    self.add_interval_job(strategy_name, seconds)
+
+    def add_config_poll_job(self, config_manager, interval=30):
+        """添加配置轮询job，定期检查重载信号"""
+        def _poll_config():
+            try:
+                config_manager.check_reload_signals()
+            except Exception as e:
+                logger.error("配置轮询失败: %s", e)
+
+        self._scheduler.add_job(
+            _poll_config,
+            'interval',
+            seconds=interval,
+            id='config_poll',
+            replace_existing=True,
+        )
+        logger.info("配置轮询job已注册，间隔%d秒", interval)
+
     def start(self) -> None:
         """启动调度器（阻塞运行）"""
         logger.info("调度器启动，已注册 %d 个策略", len(self._strategies))
