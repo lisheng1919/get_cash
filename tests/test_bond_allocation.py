@@ -67,3 +67,108 @@ def test_execute_logs_message():
     from unittest.mock import MagicMock
     strategy = BondAllocationStrategy(config={}, storage=MagicMock(), notifier=MagicMock())
     strategy.execute()  # 不应抛出异常
+
+
+def test_execute_with_allocation_list():
+    """有配债机会时应计算安全垫并推送通知"""
+    from unittest.mock import MagicMock
+    from datetime import date, timedelta
+
+    strategy = BondAllocationStrategy(
+        config={
+            "min_safety_cushion": 0.1,
+            "notify_before_record_day": 30,
+            "conservative_factor": 0.8,
+            "rush_warning_threshold": 5.0,
+        },
+        storage=MagicMock(),
+        notifier=MagicMock(),
+    )
+
+    future_date = (date.today() + timedelta(days=5)).strftime("%Y-%m-%d")
+    collector = MagicMock()
+    collector.fetch_bond_allocation_list.return_value = [
+        {
+            "code": "113001",
+            "name": "测试转债",
+            "subscribe_date": future_date,
+            "stock_code": "600001",
+            "stock_name": "测试股票",
+            "stock_price": 10.0,
+            "content_weight": 25.0,
+        },
+    ]
+    strategy._collector = collector
+
+    strategy.execute()
+    strategy._notifier.notify.assert_called_once()
+    call_args = strategy._notifier.notify.call_args
+    assert "113001" in call_args.args[1]
+
+
+def test_execute_excludes_st_stock():
+    """ST股票应被排除，不推送通知"""
+    from unittest.mock import MagicMock
+    from datetime import date, timedelta
+
+    strategy = BondAllocationStrategy(
+        config={"min_safety_cushion": 0.1, "notify_before_record_day": 30},
+        storage=MagicMock(),
+        notifier=MagicMock(),
+    )
+
+    future_date = (date.today() + timedelta(days=5)).strftime("%Y-%m-%d")
+    collector = MagicMock()
+    collector.fetch_bond_allocation_list.return_value = [
+        {
+            "code": "113001",
+            "name": "ST转债",
+            "subscribe_date": future_date,
+            "stock_code": "600001",
+            "stock_name": "ST测试",
+            "stock_price": 5.0,
+            "content_weight": 20.0,
+        },
+    ]
+    strategy._collector = collector
+
+    strategy.execute()
+    strategy._notifier.notify.assert_not_called()
+
+
+def test_execute_without_collector():
+    """未注入collector时执行不应报错"""
+    from unittest.mock import MagicMock
+    strategy = BondAllocationStrategy(config={}, storage=MagicMock(), notifier=MagicMock())
+    strategy.execute()
+    strategy._notifier.notify.assert_not_called()
+
+
+def test_execute_no_upcoming_bonds():
+    """无近期配债机会时不应推送通知"""
+    from unittest.mock import MagicMock
+    from datetime import date, timedelta
+
+    strategy = BondAllocationStrategy(
+        config={"notify_before_record_day": 7},
+        storage=MagicMock(),
+        notifier=MagicMock(),
+    )
+
+    far_date = (date.today() + timedelta(days=30)).strftime("%Y-%m-%d")
+    collector = MagicMock()
+    collector.fetch_bond_allocation_list.return_value = [
+        {
+            "code": "113001",
+            "name": "远期转债",
+            "subscribe_date": far_date,
+            "stock_code": "600001",
+            "stock_name": "测试股票",
+            "stock_price": 10.0,
+            "content_weight": 20.0,
+        },
+    ]
+    strategy._collector = collector
+
+    strategy.execute()
+    strategy._notifier.notify.assert_not_called()

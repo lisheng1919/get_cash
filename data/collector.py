@@ -227,6 +227,71 @@ class DataCollector:
             logger.error("获取可转债申购列表失败: %s", ex)
             return []
 
+    # ==================== 可转债配债 ====================
+
+    def fetch_bond_allocation_list(self) -> List[Dict]:
+        """获取即将发行可转债及正股信息
+
+        通过akshare获取可转债发行列表和正股基本信息。
+        含权量（content_weight）akshare暂无此字段，使用默认估算值20%。
+
+        Returns:
+            配债列表，每项包含 code, name, subscribe_date,
+            stock_code, stock_name, stock_price, content_weight
+        """
+        try:
+            import akshare as ak
+        except ImportError:
+            logger.error("akshare未安装，无法获取配债数据")
+            return []
+
+        try:
+            df = ak.bond_zh_cov_new_em()
+        except Exception as ex:
+            logger.error("获取可转债发行列表失败: %s", ex)
+            return []
+
+        if df is None or df.empty:
+            return []
+
+        result = []
+        for _, row in df.iterrows():
+            code = str(row.get("债券代码", "")).strip()
+            name = str(row.get("债券名称", "")).strip()
+            subscribe_date = str(row.get("申购日期", "")).strip()
+            stock_code = str(row.get("正股代码", "")).strip()
+
+            # 获取正股信息
+            stock_name = ""
+            stock_price = 0.0
+            if stock_code:
+                try:
+                    stock_df = ak.stock_individual_info_em(symbol=stock_code)
+                    if stock_df is not None and not stock_df.empty:
+                        for _, srow in stock_df.iterrows():
+                            item = str(srow.get("item", "")).strip()
+                            value = srow.get("value", "")
+                            if item == "股票简称":
+                                stock_name = str(value).strip()
+                            elif item == "最新价":
+                                try:
+                                    stock_price = float(value)
+                                except (ValueError, TypeError):
+                                    stock_price = 0.0
+                except Exception as ex:
+                    logger.warning("获取正股%s信息失败: %s", stock_code, ex)
+
+            result.append({
+                "code": code,
+                "name": name,
+                "subscribe_date": subscribe_date,
+                "stock_code": stock_code,
+                "stock_name": stock_name,
+                "stock_price": stock_price,
+                "content_weight": 20.0,
+            })
+        return result
+
     # ==================== 逆回购利率 ====================
 
     def fetch_reverse_repo_rate(self, code: str) -> Optional[float]:

@@ -1,6 +1,7 @@
 """可转债配债策略，基于保守估值计算安全垫并避让抢权风险"""
 
 import logging
+from datetime import date
 
 from strategies.base import BaseStrategy
 
@@ -94,9 +95,100 @@ class BondAllocationStrategy(BaseStrategy):
 
         流程：
         1. 获取即将发行转债的标的列表
-        2. 排除ST/退市股
-        3. 计算安全垫，筛选达标标的
-        4. 检查抢权预警
-        5. 推送符合条件的配债机会通知
+        2. 筛选近期申购的标的
+        3. 排除ST/退市股
+        4. 计算安全垫，筛选达标标的
+        5. 检查抢权预警
+        6. 入库并推送通知
         """
-        logger.info("可转债配债：检查即将发行转债...")
+        collector = getattr(self, "_collector", None)
+        if collector is None:
+            logger.info("可转债配债策略：未注入数据采集器，跳过执行")
+            return
+
+        # 获取配债列表
+        try:
+            allocation_list = collector.fetch_bond_allocation_list()
+        except Exception as ex:
+            logger.error("获取配债列表失败: %s", ex)
+            return
+
+        if not allocation_list:
+            logger.info("可转债配债：当前无发行转债")
+            return
+
+        # 筛选近期申购的标的
+        notify_days = self._config.get("notify_before_record_day", 7)
+        upcoming = []
+        for bond in allocation_list:
+            subscribe_date = bond.get("subscribe_date", "")
+            if not subscribe_date:
+                continue
+            try:
+                sub_date = date.fromisoformat(subscribe_date)
+                days_until = (sub_date - date.today()).days
+                if 0 <= days_until <= notify_days:
+                    upcoming.append(bond)
+            except ValueError:
+                continue
+
+        if not upcoming:
+            logger.info("可转债配债：近期(%d天内)无配债机会", notify_days)
+            return
+
+        # 逐只处理
+        for bond in upcoming:
+            stock_name = bond.get("stock_name", "")
+
+            # 排除ST/退市股
+            if self.is_stock_excluded(stock_name):
+                logger.info("可转债配债：排除ST/退市股 %s", stock_name)
+                continue
+
+            stock_price = bond.get("stock_price", 0.0)
+            content_weight = bond.get("content_weight", 20.0)
+
+            # 计算安全垫（使用固定默认溢价率0.30）
+            safety_cushion = self.calc_safety_cushion(
+                stock_price=stock_price,
+                content_weight=content_weight,
+                avg_opening_premium=0.30,
+            )
+
+            # 安全垫不达标
+            if safety_cushion < self._min_safety_cushion:
+                logger.info(
+                    "可转债配债：%s 安全垫%.2f%%低于阈值%.1f%%，跳过",
+                    bond.get("code", ""), safety_cushion, self._min_safety_cushion,
+                )
+                continue
+
+            # 检查抢权预警（暂用0，后续可补充）
+            if self.is_rush_warning(0):
+                logger.info("可转债配债：%s 触发抢权预警，跳过", bond.get("code", ""))
+                continue
+
+            # 入库
+            self._storage.upsert_bond_allocation(
+                code=bond.get("code", ""),
+                stock_code=bond.get("stock_code", ""),
+                stock_name=stock_name,
+                content_weight=content_weight,
+                safety_cushion=safety_cushion,
+                record_date=bond.get("subscribe_date", ""),
+            )
+
+            # 推送通知
+            self.notify(
+                title="可转债配债提醒",
+                message=(
+                    f"{bond.get('code', '')} {bond.get('name', '')}\n"
+                    f"正股：{stock_name}({bond.get('stock_code', '')}) 价格{stock_price:.2f}\n"
+                    f"含权量：{content_weight:.1f}% 安全垫：{safety_cushion:.2f}%"
+                ),
+                event_type="bond_allocation",
+            )
+            logger.info(
+                "可转债配债通知: %s 安全垫%.2f%%",
+                bond.get("code", ""), safety_cushion,
+            )

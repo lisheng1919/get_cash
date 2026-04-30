@@ -194,6 +194,8 @@ def main():
         config.get("bond_allocation", {}),
         storage, notifier,
     )
+    # 注入数据采集器
+    bond_alloc._collector = collector
 
     # 创建LOF溢价策略实例
     lof_premium = LofPremiumStrategy(

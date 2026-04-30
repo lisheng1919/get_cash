@@ -172,3 +172,46 @@ def test_fetch_lof_iopv_failure_returns_zero():
 
     assert "164906" in result
     assert result["164906"]["iopv"] == 0.0
+
+
+def test_fetch_bond_allocation_list_returns_data():
+    """fetch_bond_allocation_list应返回即将发行转债及正股信息"""
+    import pandas as pd
+    from unittest.mock import patch
+
+    collector = _create_collector()
+
+    fake_bond_df = pd.DataFrame({
+        "债券代码": ["113001", "127001"],
+        "债券名称": ["测试转债1", "测试转债2"],
+        "申购日期": ["2026-05-15", "2026-05-20"],
+        "正股代码": ["600001", "000001"],
+    })
+
+    # akshare使用懒加载，需create=True创建属性
+    with patch("akshare.bond_zh_cov_new_em", return_value=fake_bond_df, create=True):
+        with patch("akshare.stock_individual_info_em", create=True) as mock_stock:
+            mock_stock.side_effect = [
+                pd.DataFrame({"item": ["股票简称", "最新价"], "value": ["测试股票1", "10.50"]}),
+                pd.DataFrame({"item": ["股票简称", "最新价"], "value": ["测试股票2", "15.20"]}),
+            ]
+            result = collector.fetch_bond_allocation_list()
+
+    assert len(result) == 2
+    assert result[0]["code"] == "113001"
+    assert result[0]["stock_code"] == "600001"
+    assert result[0]["content_weight"] == 20.0
+
+
+def test_fetch_bond_allocation_list_empty():
+    """无发行数据时应返回空列表"""
+    import pandas as pd
+    from unittest.mock import patch
+
+    collector = _create_collector()
+
+    # akshare使用懒加载，需create=True创建属性
+    with patch("akshare.bond_zh_cov_new_em", return_value=pd.DataFrame(), create=True):
+        result = collector.fetch_bond_allocation_list()
+
+    assert result == []
