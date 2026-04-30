@@ -15,7 +15,7 @@ class DataCollector:
     主源成功时重置失败计数。
     """
 
-    def __init__(self, storage: Storage, ds_config: dict):
+    def __init__(self, storage: Storage, ds_config: dict, notifier=None):
         """初始化数据采集器
 
         Args:
@@ -24,10 +24,30 @@ class DataCollector:
                 - max_consecutive_failures: 连续失败切换阈值，默认3
                 - market_primary: 行情主源名称，默认akshare
                 - market_fallback: 行情备用源名称，默认sina
+            notifier: 通知管理器实例，用于数据源故障告警通知
         """
         self._storage = storage
         self._max_failures = ds_config.get("max_consecutive_failures", 3)
         self._ds_config = ds_config
+        self._notifier = notifier
+
+    def _alert_data_source_failure(self, name: str, fail_count: int, reason: str = "") -> None:
+        """数据源连续失败达阈值时产生告警和通知"""
+        if fail_count < self._max_failures:
+            return
+        msg = "数据源%s连续失败%d次，达到阈值" % (name, fail_count)
+        if reason:
+            msg += "，原因: %s" % reason[:100]
+        self._storage.insert_alert_event("ERROR", "collector", msg)
+        if self._notifier is not None:
+            try:
+                self._notifier.notify(
+                    title="数据源故障告警",
+                    message=msg,
+                    event_type="data_source_failure",
+                )
+            except Exception:
+                logger.error("发送数据源故障通知失败")
 
     # ==================== LOF基金列表 ====================
 
@@ -105,9 +125,10 @@ class DataCollector:
             # 主源成功，重置失败计数
             self._storage.update_data_source_status("lof_list", "ok")
             return result
-        except Exception:
+        except Exception as ex:
             # 主源失败，记录失败次数
-            fail_count = self._storage.record_data_source_failure("lof_list")
+            fail_count = self._storage.record_data_source_failure("lof_list", str(ex)[:200])
+            self._alert_data_source_failure("lof_list", fail_count, str(ex))
             if fail_count >= self._max_failures:
                 logger.warning(
                     "LOF基金列表主源连续失败%d次，达到阈值，切换备用源",
@@ -140,40 +161,47 @@ class DataCollector:
         if not codes:
             return {}
 
-        result = {}
-        # 优先使用缓存（来自fund_etf_category_sina的实时数据）
-        cache = getattr(self, "_lof_price_cache", {})
-        missed_codes = []
-        for code in codes:
-            if code in cache:
-                result[code] = {"code": code, "price": cache[code], "volume": 0.0}
-            else:
-                missed_codes.append(code)
+        try:
+            result = {}
+            # 优先使用缓存（来自fund_etf_category_sina的实时数据）
+            cache = getattr(self, "_lof_price_cache", {})
+            missed_codes = []
+            for code in codes:
+                if code in cache:
+                    result[code] = {"code": code, "price": cache[code], "volume": 0.0}
+                else:
+                    missed_codes.append(code)
 
-        # 缓存未命中时回退到逐只查询
-        if missed_codes:
-            try:
-                import akshare as ak
-                for code in missed_codes:
-                    try:
-                        df = ak.fund_etf_hist_em(symbol=code, period="daily", adjust="qfq")
-                        if df is not None and not df.empty:
-                            latest = df.iloc[-1]
-                            result[code] = {
-                                "code": code,
-                                "price": float(latest.get("收盘", 0)),
-                                "volume": float(latest.get("成交量", 0)),
-                            }
-                        else:
+            # 缓存未命中时回退到逐只查询
+            if missed_codes:
+                try:
+                    import akshare as ak
+                    for code in missed_codes:
+                        try:
+                            df = ak.fund_etf_hist_em(symbol=code, period="daily", adjust="qfq")
+                            if df is not None and not df.empty:
+                                latest = df.iloc[-1]
+                                result[code] = {
+                                    "code": code,
+                                    "price": float(latest.get("收盘", 0)),
+                                    "volume": float(latest.get("成交量", 0)),
+                                }
+                            else:
+                                result[code] = {"code": code, "price": 0.0, "volume": 0.0}
+                        except Exception as ex:
+                            logger.warning("获取基金%s实时行情失败: %s", code, ex)
                             result[code] = {"code": code, "price": 0.0, "volume": 0.0}
-                    except Exception as ex:
-                        logger.warning("获取基金%s实时行情失败: %s", code, ex)
+                except ImportError:
+                    logger.error("akshare未安装，无法获取实时行情")
+                    for code in missed_codes:
                         result[code] = {"code": code, "price": 0.0, "volume": 0.0}
-            except ImportError:
-                logger.error("akshare未安装，无法获取实时行情")
-                for code in missed_codes:
-                    result[code] = {"code": code, "price": 0.0, "volume": 0.0}
-        return result
+            self._storage.update_data_source_status("lof_realtime", "ok")
+            return result
+        except Exception as ex:
+            logger.error("获取实时行情失败: %s", ex)
+            fail_count = self._storage.record_data_source_failure("lof_realtime", str(ex)[:200])
+            self._alert_data_source_failure("lof_realtime", fail_count, str(ex))
+            return {}
 
     # ==================== LOF基金IOPV（净值） ====================
 
@@ -240,6 +268,8 @@ class DataCollector:
                             result[code] = {"iopv": est_map[pure_code], "iopv_source": "estimated"}
             except Exception as ex:
                 logger.warning("批量获取LOF估值失败，回退逐只查询: %s", ex)
+                fail_count = self._storage.record_data_source_failure("lof_iopv", str(ex)[:200])
+                self._alert_data_source_failure("lof_iopv", fail_count, str(ex))
         except ImportError:
             logger.error("akshare未安装，无法获取IOPV数据")
             return {code: {"iopv": 0.0, "iopv_source": "estimated"} for code in codes}
@@ -267,6 +297,7 @@ class DataCollector:
                 for code in missed_codes:
                     result[code] = {"iopv": 0.0, "iopv_source": "estimated"}
 
+        self._storage.update_data_source_status("lof_iopv", "ok")
         return result
 
     # ==================== 可转债申购 ====================
@@ -293,9 +324,12 @@ class DataCollector:
                     "name": name,
                     "subscribe_date": subscribe_date,
                 })
+            self._storage.update_data_source_status("bond_ipo", "ok")
             return result
         except Exception as ex:
             logger.error("获取可转债申购列表失败: %s", ex)
+            fail_count = self._storage.record_data_source_failure("bond_ipo", str(ex)[:200])
+            self._alert_data_source_failure("bond_ipo", fail_count, str(ex))
             return []
 
     # ==================== 可转债配债 ====================
@@ -320,6 +354,8 @@ class DataCollector:
             df = ak.bond_zh_cov_new_em()
         except Exception as ex:
             logger.error("获取可转债发行列表失败: %s", ex)
+            fail_count = self._storage.record_data_source_failure("bond_alloc", str(ex)[:200])
+            self._alert_data_source_failure("bond_alloc", fail_count, str(ex))
             return []
 
         if df is None or df.empty:
@@ -361,6 +397,7 @@ class DataCollector:
                 "stock_price": stock_price,
                 "content_weight": 20.0,
             })
+        self._storage.update_data_source_status("bond_alloc", "ok")
         return result
 
     # ==================== 逆回购利率 ====================
@@ -380,7 +417,12 @@ class DataCollector:
             if df is not None and not df.empty:
                 latest = df.iloc[-1]
                 rate = float(latest.get("最新价", 0))
-                return rate if rate > 0 else None
+                if rate > 0:
+                    self._storage.update_data_source_status("reverse_repo", "ok")
+                    return rate
+                return None
         except Exception as ex:
             logger.error("获取逆回购利率失败(code=%s): %s", code, ex)
+            fail_count = self._storage.record_data_source_failure("reverse_repo", str(ex)[:200])
+            self._alert_data_source_failure("reverse_repo", fail_count, str(ex))
         return None
