@@ -1,6 +1,7 @@
 import logging
 import sqlite3
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from config_loader import load_config, validate_config
@@ -39,7 +40,7 @@ def setup_database(db_path: str) -> sqlite3.Connection:
     return conn
 
 
-def setup_notifier(config: dict) -> NotificationManager:
+def setup_notifier(config: dict, storage=None) -> NotificationManager:
     """根据配置初始化通知管理器，注册已启用的通知渠道
 
     Args:
@@ -50,7 +51,7 @@ def setup_notifier(config: dict) -> NotificationManager:
     """
     notify_config = config.get("notify", {})
     dual_events = notify_config.get("dual_channel_events", [])
-    mgr = NotificationManager(notify_config, dual_channel_events=dual_events)
+    mgr = NotificationManager(notify_config, dual_channel_events=dual_events, storage=storage)
 
     # 桌面通知
     if notify_config.get("desktop", {}).get("enabled", False):
@@ -130,6 +131,17 @@ def run_selfcheck(config: dict, storage: Storage, collector: DataCollector) -> N
         logger.warning("自检-交易日历检查异常: %s", e)
         results.append(("交易日历数据", "WARN: %s" % e))
 
+    # 持久化自检结果到告警事件 + system_status
+    for name, result in results:
+        if result == "PASS":
+            storage.insert_alert_event("OK", "selfcheck", "%s: %s" % (name, result))
+        elif result.startswith("FAIL"):
+            storage.insert_alert_event("ERROR", "selfcheck", "%s: %s" % (name, result))
+        elif result.startswith("WARN"):
+            storage.insert_alert_event("WARN", "selfcheck", "%s: %s" % (name, result))
+    all_pass = all(r == "PASS" for _, r in results)
+    storage.upsert_system_status("selfcheck_result", "all_passed" if all_pass else "has_failures")
+
     # 汇总输出
     logger.info("===== 启动自检结果 =====")
     for name, result in results:
@@ -164,13 +176,14 @@ def main():
             logger.warning("交易日历自动同步失败，系统将继续运行: %s", e)
 
     # 初始化通知管理器
-    notifier = setup_notifier(config)
+    notifier = setup_notifier(config, storage=storage)
 
     # 初始化数据采集器
-    collector = DataCollector(storage, config.get("data_source", {}))
+    collector = DataCollector(storage, config.get("data_source", {}), notifier=notifier)
 
     # 初始化调度器
-    scheduler = StrategyScheduler(calendar)
+    slow_threshold = config.get("system", {}).get("slow_threshold_ms", 30000)
+    scheduler = StrategyScheduler(calendar, storage=storage, slow_threshold_ms=slow_threshold)
 
     # 读取策略开关配置
     strategy_config = config.get("strategies", {})
@@ -224,6 +237,15 @@ def main():
     lof_premium_interval = config.get("lof_premium", {}).get("poll_interval", 5)
     if strategy_config.get("lof_premium", {}).get("enabled", True):
         scheduler.add_interval_job("lof_premium", lof_premium_interval)
+
+    # 持久化系统启动时间
+    start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    storage.upsert_system_status("start_time", start_time)
+    strategy_names = [name for name, _ in [
+        ("bond_ipo", bond_ipo), ("reverse_repo", reverse_repo),
+        ("bond_allocation", bond_alloc), ("lof_premium", lof_premium),
+    ] if strategy_config.get(name, {}).get("enabled", True)]
+    storage.insert_alert_event("INFO", "system", "系统启动，策略: %s" % ", ".join(strategy_names))
 
     # 启动自检
     if config.get("system", {}).get("startup_selfcheck", True):
