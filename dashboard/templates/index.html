@@ -8,144 +8,482 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: "Microsoft YaHei", sans-serif; background: #f5f5f5; color: #333; padding: 20px; }
         h1 { text-align: center; margin-bottom: 16px; font-size: 24px; color: #222; }
+
+        /* 标签页 */
         .tabs { display: flex; border-bottom: 2px solid #e8e8e8; margin-bottom: 20px; }
-        .tab { padding: 10px 24px; cursor: pointer; font-size: 15px; color: #666; border-bottom: 3px solid transparent; transition: all 0.2s; }
+        .tab { padding: 10px 24px; cursor: pointer; font-size: 15px; color: #666; border-bottom: 3px solid transparent; transition: all 0.2s; user-select: none; }
         .tab.active { color: #1890ff; border-bottom-color: #1890ff; font-weight: 600; }
         .tab:hover { color: #1890ff; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
+
+        /* 通用卡片 */
         .section { background: #fff; border-radius: 6px; padding: 16px 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         .section h2 { font-size: 16px; color: #444; margin-bottom: 12px; border-left: 3px solid #1890ff; padding-left: 8px; }
+
+        /* 表格 */
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
         th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #e8e8e8; white-space: nowrap; }
         th { background: #fafafa; color: #666; font-weight: 600; }
         tr:hover td { background: #f0f7ff; }
         .empty { color: #999; padding: 12px 0; font-size: 13px; }
+
+        /* 状态卡片 */
         .status-cards { display: flex; gap: 12px; margin-bottom: 16px; }
         .status-card { flex: 1; background: #fff; border-radius: 6px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         .status-card h3 { font-size: 13px; color: #999; margin-bottom: 8px; }
         .status-ok { color: #52c41a; }
         .status-warn { color: #fa8c16; }
         .status-error { color: #f5222d; }
+
+        /* 告警级别标签 */
         .level-ERROR { background: #f5222d; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 11px; }
         .level-WARN { background: #fa8c16; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 11px; }
         .level-INFO { background: #1890ff; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 11px; }
         .level-OK { background: #52c41a; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 11px; }
+
+        /* 柱状图 */
         .bar-chart { height: 80px; display: flex; align-items: flex-end; gap: 4px; padding: 8px 0; }
         .bar-chart .bar { flex: 1; border-radius: 2px 2px 0 0; min-width: 8px; position: relative; }
         .bar-chart .bar .bar-label { position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%); font-size: 10px; color: #999; white-space: nowrap; }
+
+        /* 刷新信息 */
         .refresh-info { text-align: right; font-size: 12px; color: #999; margin-bottom: 8px; }
+
+        /* 静默/解除按钮 */
         .mute-btn, .unmute-btn { padding: 2px 8px; font-size: 12px; cursor: pointer; border: 1px solid #1890ff; background: #fff; color: #1890ff; border-radius: 3px; }
         .mute-btn:hover, .unmute-btn:hover { background: #1890ff; color: #fff; }
+
+        /* 分页组件 */
+        .dt-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+        .dt-search { display: flex; align-items: center; gap: 6px; }
+        .dt-search input { padding: 4px 10px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 13px; width: 200px; }
+        .dt-search input:focus { border-color: #1890ff; outline: none; box-shadow: 0 0 0 2px rgba(24,144,255,0.2); }
+        .dt-search button { padding: 4px 12px; background: #1890ff; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+        .dt-search button:hover { background: #40a9ff; }
+        .dt-pagesize { display: flex; align-items: center; gap: 4px; font-size: 13px; color: #666; }
+        .dt-pagesize select { padding: 2px 6px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 13px; }
+        .dt-pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; font-size: 13px; color: #666; }
+        .dt-page-btns { display: flex; gap: 4px; }
+        .dt-page-btns button { padding: 2px 10px; border: 1px solid #d9d9d9; background: #fff; border-radius: 4px; cursor: pointer; font-size: 13px; color: #333; }
+        .dt-page-btns button:hover { border-color: #1890ff; color: #1890ff; }
+        .dt-page-btns button.active { background: #1890ff; color: #fff; border-color: #1890ff; }
+        .dt-page-btns button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .dt-loading { text-align: center; color: #999; padding: 20px 0; }
+
+        /* 配置页 */
+        .config-reload-bar { display: flex; align-items: center; justify-content: flex-end; margin-bottom: 16px; gap: 8px; }
+        .config-reload-bar button { padding: 6px 16px; background: #1890ff; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+        .config-reload-bar button:hover { background: #40a9ff; }
+        .config-category { margin-bottom: 20px; }
+        .config-category h2 { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; }
+        .config-category h2 .arrow { font-size: 12px; transition: transform 0.2s; display: inline-block; }
+        .config-category h2 .arrow.collapsed { transform: rotate(-90deg); }
+        .config-section { margin-bottom: 12px; }
+        .config-section h3 { font-size: 14px; color: #555; margin: 10px 0 8px 0; padding-left: 12px; border-left: 2px solid #91d5ff; cursor: pointer; user-select: none; }
+        .config-section h3 .arrow { font-size: 11px; transition: transform 0.2s; display: inline-block; }
+        .config-section h3 .arrow.collapsed { transform: rotate(-90deg); }
+        .config-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+        .config-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+        .config-item label { min-width: 140px; font-size: 13px; color: #555; }
+        .config-item input[type="text"], .config-item input[type="number"] { flex: 1; padding: 4px 8px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 13px; max-width: 200px; }
+        .config-item input:focus { border-color: #1890ff; outline: none; box-shadow: 0 0 0 2px rgba(24,144,255,0.2); }
+        .config-item input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+        .config-item .key-hint { font-size: 11px; color: #bbb; }
+        .config-save-bar { text-align: right; margin-top: 8px; }
+        .config-save-bar button { padding: 6px 20px; background: #52c41a; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+        .config-save-bar button:hover { background: #73d13d; }
+        .config-msg { font-size: 12px; margin-left: 8px; }
+        .config-msg.ok { color: #52c41a; }
+        .config-msg.err { color: #f5222d; }
+
+        /* 双列布局 */
+        .row-2col { display: flex; gap: 12px; margin-bottom: 20px; }
+        .row-2col > div { flex: 1; }
+
+        /* 简单分页（告警/通知用） */
+        .simple-pagination { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; font-size: 13px; color: #666; }
+        .simple-pagination button { padding: 2px 10px; border: 1px solid #d9d9d9; background: #fff; border-radius: 4px; cursor: pointer; font-size: 13px; }
+        .simple-pagination button:hover { border-color: #1890ff; color: #1890ff; }
+        .simple-pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
     </style>
 </head>
 <body>
+{% raw %}
     <h1>个人量化套利中枢</h1>
 
-    <div class="tabs">
-        <div class="tab active" onclick="switchTab('status', this)">状态总览</div>
-        <div class="tab" onclick="switchTab('data', this)">业务数据</div>
+    <div v-scope="App()" @mounted="init">
+        <!-- 标签页导航 -->
+        <div class="tabs">
+            <div class="tab" :class="{ active: activeTab === 'status' }" @click="switchTab('status')">状态总览</div>
+            <div class="tab" :class="{ active: activeTab === 'data' }" @click="switchTab('data')">业务数据</div>
+            <div class="tab" :class="{ active: activeTab === 'config' }" @click="switchTab('config')">配置管理</div>
+        </div>
+
+        <!-- ==================== 状态总览 ==================== -->
+        <div v-show="activeTab === 'status'" v-scope="StatusTab()" @mounted="statusInit">
+            <div class="refresh-info">上次刷新: {{ refreshTime }}</div>
+
+            <!-- 第一行：3个状态卡片 -->
+            <div class="status-cards">
+                <div class="status-card">
+                    <h3>系统健康</h3>
+                    <div style="font-size:18px;font-weight:bold" :class="statusClass(sys.status)">
+                        {{ sys.status === 'running' ? '● 运行中' : '○ 停止' }}
+                    </div>
+                    <div style="font-size:13px;margin-top:6px">运行时长: {{ formatUptime(sys.uptime_seconds) }}</div>
+                    <div style="font-size:13px">自检: {{ sys.selfcheck || 'unknown' }}</div>
+                    <div style="font-size:13px">上次心跳: {{ sys.last_heartbeat || '--' }}</div>
+                </div>
+                <div class="status-card">
+                    <h3>数据源状态</h3>
+                    <div v-if="dataSources.length === 0" style="color:#999">暂无记录</div>
+                    <div v-for="ds in dataSources" style="font-size:13px;line-height:1.8">
+                        <span :class="statusClass(ds.status)">{{ statusIcon(ds.status) }}</span>
+                        {{ ds.name }}
+                        <span v-if="ds.consecutive_failures > 0" style="color:#fa8c16;font-size:11px">{{ ds.consecutive_failures }}次失败</span>
+                        <span style="color:#999;font-size:11px">{{ ds.last_success_time || '--' }}</span>
+                    </div>
+                </div>
+                <div class="status-card">
+                    <h3>通知渠道状态</h3>
+                    <div style="font-size:13px;line-height:1.8">
+                        今日发送: {{ notifStats.total || 0 }}次<br>
+                        <span class="status-ok">成功: {{ notifStats.success || 0 }}</span><br>
+                        <span class="status-error">失败: {{ notifStats.fail || 0 }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 第二行：执行概况 + 耗时趋势 -->
+            <div class="row-2col">
+                <div class="section">
+                    <h2>策略执行概况</h2>
+                    <table>
+                        <thead><tr><th>策略</th><th>上次执行</th><th>结果</th><th>耗时</th><th>今日次数</th></tr></thead>
+                        <tbody>
+                            <tr v-if="strategyExec.length === 0"><td colspan="5" class="empty">暂无记录</td></tr>
+                            <tr v-for="se in strategyExec">
+                                <td>{{ se.strategy_name }}</td>
+                                <td>{{ se.last_trigger_time || '--' }}</td>
+                                <td><span :class="statusClass(se.last_status)">{{ se.last_status }}</span></td>
+                                <td>{{ formatDuration(se.last_duration_ms) }}</td>
+                                <td>{{ se.today_count || 0 }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="section">
+                    <h2>执行耗时趋势(LOF溢价)</h2>
+                    <div class="bar-chart">
+                        <div v-if="execTrend.length === 0" class="empty">暂无数据</div>
+                        <div v-for="item in execTrendReversed" class="bar"
+                             :style="{ height: Math.max(Math.min(item.duration_ms / 30000 * 100, 100), 3) + '%', background: item.duration_ms > 30000 ? '#f5222d' : '#1890ff' }">
+                            <span class="bar-label">{{ formatTimeShort(item.trigger_time) }}</span>
+                        </div>
+                    </div>
+                    <div style="font-size:11px;color:#999;margin-top:20px">红色柱 = 超过阈值(30s)</div>
+                </div>
+            </div>
+
+            <!-- 第三行：告警流 + 通知记录 -->
+            <div class="row-2col">
+                <div class="section">
+                    <h2>告警事件流</h2>
+                    <div v-if="alertItems.length === 0" class="empty">暂无告警</div>
+                    <div v-for="e in alertItems" style="margin-bottom:6px;font-size:12px">
+                        <span :class="'level-' + e.level">{{ e.level }}</span>
+                        <span style="color:#999">{{ e.timestamp || '' }}</span>
+                        <span style="color:#666">[{{ e.source }}]</span>
+                        {{ e.message }}
+                    </div>
+                    <div class="simple-pagination" v-if="alertTotalPages > 1">
+                        <span>共 {{ alertTotal }} 条</span>
+                        <div>
+                            <button :disabled="alertPage <= 1" @click="changeAlertPage(alertPage - 1)">上一页</button>
+                            <span style="margin:0 8px">{{ alertPage }} / {{ alertTotalPages }}</span>
+                            <button :disabled="alertPage >= alertTotalPages" @click="changeAlertPage(alertPage + 1)">下一页</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="section">
+                    <h2>通知发送记录</h2>
+                    <table>
+                        <thead><tr><th>时间</th><th>渠道</th><th>事件</th><th>状态</th></tr></thead>
+                        <tbody>
+                            <tr v-if="notifItems.length === 0"><td colspan="4" class="empty">暂无记录</td></tr>
+                            <tr v-for="nl in notifItems">
+                                <td>{{ nl.timestamp || '--' }}</td>
+                                <td>{{ nl.channel }}</td>
+                                <td>{{ nl.event_type }}</td>
+                                <td><span :class="statusClass(nl.status)">{{ nl.status }}</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="simple-pagination" v-if="notifTotalPages > 1">
+                        <span>共 {{ notifTotal }} 条</span>
+                        <div>
+                            <button :disabled="notifPage <= 1" @click="changeNotifPage(notifPage - 1)">上一页</button>
+                            <span style="margin:0 8px">{{ notifPage }} / {{ notifTotalPages }}</span>
+                            <button :disabled="notifPage >= notifTotalPages" @click="changeNotifPage(notifPage + 1)">下一页</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 第四行：已静默基金 -->
+            <div class="section">
+                <h2>已静默基金</h2>
+                <!-- 工具栏 -->
+                <div class="dt-toolbar">
+                    <div class="dt-search">
+                        <input type="text" v-model="mutedSearch" placeholder="搜索基金代码/名称..." @keydown.enter="mutedDoSearch">
+                        <button @click="mutedDoSearch">搜索</button>
+                    </div>
+                    <div class="dt-pagesize">
+                        每页
+                        <select :value="mutedPageSize" @change="mutedChangePageSize($event.target.value)">
+                            <option value="10">10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                        </select>
+                        条
+                    </div>
+                </div>
+                <div v-if="mutedLoading" class="dt-loading">加载中...</div>
+                <table v-if="!mutedLoading">
+                    <thead><tr><th>代码</th><th>名称</th><th>原因</th><th>到期时间</th><th>操作</th></tr></thead>
+                    <tbody>
+                        <tr v-if="mutedItems.length === 0"><td colspan="5" class="empty">暂无静默基金</td></tr>
+                        <tr v-for="f in mutedItems">
+                            <td>{{ f.code }}</td>
+                            <td>{{ f.name || '' }}</td>
+                            <td>{{ f.mute_reason }}</td>
+                            <td>{{ f.muted_until }}</td>
+                            <td><button class="unmute-btn" @click="doUnmute(f.code)">解除</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="dt-pagination" v-if="mutedTotalPages > 0">
+                    <span>共 {{ mutedTotal }} 条，第 {{ mutedPage }}/{{ mutedTotalPages }} 页</span>
+                    <div class="dt-page-btns">
+                        <button :disabled="mutedPage <= 1" @click="mutedChangePage(1)">首页</button>
+                        <button :disabled="mutedPage <= 1" @click="mutedChangePage(mutedPage - 1)">上一页</button>
+                        <button v-for="p in mutedPageButtons" :class="{ active: p === mutedPage }" @click="mutedChangePage(p)">{{ p }}</button>
+                        <button :disabled="mutedPage >= mutedTotalPages" @click="mutedChangePage(mutedPage + 1)">下一页</button>
+                        <button :disabled="mutedPage >= mutedTotalPages" @click="mutedChangePage(mutedTotalPages)">末页</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 业务数据 ==================== -->
+        <div v-show="activeTab === 'data'" v-scope="DataTab()">
+            <!-- LOF溢价历史 -->
+            <div class="section">
+                <h2>LOF溢价历史</h2>
+                <div v-scope="DataTable({
+                    apiUrl: '/api/data/lof_premium',
+                    columns: [
+                        {key: 'timestamp', label: '时间'},
+                        {key: 'fund_code', label: '基金代码'},
+                        {key: 'price', label: '价格'},
+                        {key: 'iopv', label: 'IOPV'},
+                        {key: 'premium_rate', label: '溢价率'},
+                        {key: 'iopv_source', label: 'IOPV来源'}
+                    ],
+                    searchPlaceholder: '搜索基金代码...',
+                    defaultSortBy: 'timestamp'
+                })" @mounted="dtInit"></div>
+            </div>
+
+            <!-- 交易信号 -->
+            <div class="section">
+                <h2>交易信号</h2>
+                <div v-scope="DataTable({
+                    apiUrl: '/api/data/trade_signal',
+                    columns: [
+                        {key: 'trigger_time', label: '触发时间'},
+                        {key: 'fund_code', label: '基金代码'},
+                        {key: 'premium_rate', label: '溢价率'},
+                        {key: 'action', label: '动作'},
+                        {key: 'status', label: '状态'},
+                        {key: 'iopv_source', label: 'IOPV来源'}
+                    ],
+                    searchPlaceholder: '搜索基金代码/动作...',
+                    defaultSortBy: 'trigger_time'
+                })" @mounted="dtInit"></div>
+            </div>
+
+            <!-- 可转债打新 -->
+            <div class="section">
+                <h2>可转债打新</h2>
+                <div v-scope="DataTable({
+                    apiUrl: '/api/data/bond_ipo',
+                    columns: [
+                        {key: 'code', label: '代码'},
+                        {key: 'name', label: '名称'},
+                        {key: 'subscribe_date', label: '申购日期'},
+                        {key: 'winning_result', label: '中签结果'},
+                        {key: 'payment_status', label: '缴款状态'},
+                        {key: 'listing_date', label: '上市日期'}
+                    ],
+                    searchPlaceholder: '搜索代码/名称...',
+                    defaultSortBy: 'subscribe_date'
+                })" @mounted="dtInit"></div>
+            </div>
+
+            <!-- 配债监控 -->
+            <div class="section">
+                <h2>配债监控</h2>
+                <div v-scope="DataTable({
+                    apiUrl: '/api/data/bond_allocation',
+                    columns: [
+                        {key: 'code', label: '代码'},
+                        {key: 'stock_code', label: '股票代码'},
+                        {key: 'stock_name', label: '股票名称'},
+                        {key: 'content_weight', label: '配售权重'},
+                        {key: 'safety_cushion', label: '安全垫'},
+                        {key: 'record_date', label: '股权登记日'}
+                    ],
+                    searchPlaceholder: '搜索代码/名称...',
+                    defaultSortBy: 'record_date'
+                })" @mounted="dtInit"></div>
+            </div>
+
+            <!-- 逆回购 -->
+            <div class="section">
+                <h2>逆回购</h2>
+                <div v-scope="DataTable({
+                    apiUrl: '/api/data/reverse_repo',
+                    columns: [
+                        {key: 'date', label: '日期'},
+                        {key: 'code', label: '代码'},
+                        {key: 'rate', label: '利率'},
+                        {key: 'amount', label: '金额'},
+                        {key: 'due_date', label: '到期日'},
+                        {key: 'profit', label: '收益'}
+                    ],
+                    searchPlaceholder: '搜索日期...',
+                    defaultSortBy: 'date'
+                })" @mounted="dtInit"></div>
+            </div>
+
+            <!-- 日汇总 -->
+            <div class="section">
+                <h2>日汇总</h2>
+                <div v-scope="DataTable({
+                    apiUrl: '/api/data/daily_summary',
+                    columns: [
+                        {key: 'date', label: '日期'},
+                        {key: 'strategy_type', label: '策略类型'},
+                        {key: 'profit', label: '收益'},
+                        {key: 'action_log', label: '操作日志'}
+                    ],
+                    searchPlaceholder: '搜索日期/策略...',
+                    defaultSortBy: 'date'
+                })" @mounted="dtInit"></div>
+            </div>
+        </div>
+
+        <!-- ==================== 配置管理 ==================== -->
+        <div v-show="activeTab === 'config'" v-scope="ConfigTab()" @mounted="configInit">
+            <div class="config-reload-bar">
+                <button @click="reloadConfig">手动重载配置</button>
+            </div>
+
+            <div v-if="!configLoaded" class="dt-loading">加载中...</div>
+
+            <div v-for="cat in orderedCategories" class="config-category section">
+                <h2 @click="toggleCategory(cat)">
+                    <span class="arrow" :class="{ collapsed: isCategoryCollapsed(cat) }">&#9660;</span>
+                    {{ getCategoryName(cat) }}
+                </h2>
+                <div v-show="!isCategoryCollapsed(cat)">
+                    <div v-for="(secItems, sec) in categories[cat]" class="config-section">
+                        <h3 @click="toggleSection(cat, sec)">
+                            <span class="arrow" :class="{ collapsed: isSectionCollapsed(cat, sec) }">&#9660;</span>
+                            {{ sec }}
+                        </h3>
+                        <div v-show="!isSectionCollapsed(cat, sec)" class="config-grid">
+                            <div v-for="item in secItems" class="config-item">
+                                <label>{{ item.label || item.key }}</label>
+                                <!-- 布尔类型 -->
+                                <input v-if="getInputType(item) === 'checkbox'"
+                                       type="checkbox"
+                                       :checked="getBoolValue(item)"
+                                       @change="onValueChange(item, $event)">
+                                <!-- 数字类型 -->
+                                <input v-if="getInputType(item) === 'number'"
+                                       type="number"
+                                       :value="item.value"
+                                       :step="getInputStep(item)"
+                                       @change="onValueChange(item, $event)">
+                                <!-- 文本类型 -->
+                                <input v-if="getInputType(item) === 'text'"
+                                       type="text"
+                                       :value="item.value"
+                                       @change="onValueChange(item, $event)">
+                                <span class="key-hint">{{ item.key }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="config-save-bar">
+                        <button @click="saveCategory(cat)">保存</button>
+                        <span v-if="saveMsg[cat]" class="config-msg" :class="saveMsg[cat].cls">{{ saveMsg[cat].text }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- 状态总览 -->
-    <div id="tab-status" class="tab-content active">
-        <div class="refresh-info" id="status-refresh-time"></div>
-
-        <!-- 第一行：3个状态卡片 -->
-        <div class="status-cards" id="status-cards">
-            <div class="status-card" id="card-system">
-                <h3>系统健康</h3>
-                <div id="system-status">加载中...</div>
+    <!-- DataTable 通用模板（被 v-scope 引用） -->
+    <template id="data-table-tpl">
+        <div>
+            <div class="dt-toolbar">
+                <div class="dt-search">
+                    <input type="text" v-model="search" :placeholder="searchPlaceholder" @keydown.enter="doSearch">
+                    <button @click="doSearch">搜索</button>
+                </div>
+                <div class="dt-pagesize">
+                    每页
+                    <select :value="pageSize" @change="changePageSize($event.target.value)">
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                    条
+                </div>
             </div>
-            <div class="status-card" id="card-datasource">
-                <h3>数据源状态</h3>
-                <div id="datasource-status">加载中...</div>
-            </div>
-            <div class="status-card" id="card-notification">
-                <h3>通知渠道状态</h3>
-                <div id="notification-status">加载中...</div>
-            </div>
-        </div>
-
-        <!-- 第二行：执行概况 + 耗时趋势 -->
-        <div style="display:flex;gap:12px;margin-bottom:20px">
-            <div style="flex:1" class="section">
-                <h2>策略执行概况</h2>
-                <table id="execution-table">
-                    <thead><tr><th>策略</th><th>上次执行</th><th>结果</th><th>耗时</th><th>今日次数</th></tr></thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-            <div style="flex:1" class="section">
-                <h2>执行耗时趋势(LOF溢价)</h2>
-                <div id="execution-trend" class="bar-chart"></div>
-                <div style="font-size:11px;color:#999;margin-top:20px">红色柱 = 超过阈值(30s)</div>
-            </div>
-        </div>
-
-        <!-- 第三行：告警流 + 通知记录 -->
-        <div style="display:flex;gap:12px;margin-bottom:20px">
-            <div style="flex:1" class="section">
-                <h2>告警事件流</h2>
-                <div id="alert-events"><p class="empty">加载中...</p></div>
-            </div>
-            <div style="flex:1" class="section">
-                <h2>通知发送记录</h2>
-                <table id="notification-logs-table">
-                    <thead><tr><th>时间</th><th>渠道</th><th>事件</th><th>状态</th></tr></thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- 第四行：已静默基金 -->
-        <div class="section" id="muted-funds-section">
-            <h2>已静默基金</h2>
-            <table id="muted-funds-table">
-                <thead><tr><th>代码</th><th>名称</th><th>原因</th><th>到期时间</th><th>操作</th></tr></thead>
-                <tbody></tbody>
-            </table>
-            <p class="empty" id="muted-funds-empty" style="display:none">暂无静默基金</p>
-        </div>
-    </div>
-    <div id="tab-data" class="tab-content">
-        {% for section in data_sections %}
-        <div class="section">
-            <h2>{{ section.title }}</h2>
-            {% if section.rows %}
-            <table>
+            <div v-if="loading" class="dt-loading">加载中...</div>
+            <table v-if="!loading">
                 <thead>
                     <tr>
-                        {% for col in section.columns %}
-                        <th>{{ col }}</th>
-                        {% endfor %}
+                        <th v-for="col in columns">{{ col.label }}</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for row in section.rows %}
-                    <tr>
-                        {% for col in section.columns %}
-                        <td>{{ row[col]|safe }}</td>
-                        {% endfor %}
+                    <tr v-if="items.length === 0"><td :colspan="columns.length" class="empty">暂无数据</td></tr>
+                    <tr v-for="row in items">
+                        <td v-for="col in columns">{{ getCellValue(row, col.key) }}</td>
                     </tr>
-                    {% endfor %}
                 </tbody>
             </table>
-            {% else %}
-            <p class="empty">暂无数据</p>
-            {% endif %}
+            <div class="dt-pagination" v-if="totalPages > 0">
+                <span>共 {{ total }} 条，第 {{ page }}/{{ totalPages }} 页</span>
+                <div class="dt-page-btns">
+                    <button :disabled="page <= 1" @click="changePage(1)">首页</button>
+                    <button :disabled="page <= 1" @click="changePage(page - 1)">上一页</button>
+                    <button v-for="p in pageButtons" :class="{ active: p === page }" @click="changePage(p)">{{ p }}</button>
+                    <button :disabled="page >= totalPages" @click="changePage(page + 1)">下一页</button>
+                    <button :disabled="page >= totalPages" @click="changePage(totalPages)">末页</button>
+                </div>
+            </div>
         </div>
-        {% endfor %}
-    </div>
+    </template>
 
+    <script src="/static/petite-vue.js"></script>
     <script>
-    function switchTab(tabName, tabEl) {
-        document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
-        document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.remove('active'); });
-        document.querySelector('#tab-' + tabName).classList.add('active');
-        tabEl.classList.add('active');
-    }
-
+    /* ===== 工具函数 ===== */
     function formatUptime(seconds) {
         if (!seconds) return '--';
         var h = Math.floor(seconds / 3600);
@@ -155,7 +493,7 @@
     }
 
     function formatDuration(ms) {
-        if (!ms && ms !== 0) return '--';
+        if (ms === null || ms === undefined) return '--';
         if (ms < 1000) return ms + 'ms';
         return (ms / 1000).toFixed(1) + 's';
     }
@@ -174,149 +512,544 @@
         return '○';
     }
 
-    function refreshStatus() {
-        fetch('/api/status').then(function(r) { return r.json(); }).then(function(data) {
-            document.getElementById('status-refresh-time').textContent = '上次刷新: ' + new Date().toLocaleTimeString();
-
-            var sys = data.system || {};
-            document.getElementById('system-status').innerHTML =
-                '<div style="font-size:18px;font-weight:bold" class="status-ok">● 运行中</div>' +
-                '<div style="font-size:13px;margin-top:6px">运行时长: ' + formatUptime(sys.uptime_seconds) + '</div>' +
-                '<div style="font-size:13px">自检: ' + (sys.selfcheck || 'unknown') + '</div>' +
-                '<div style="font-size:13px">上次心跳: ' + (sys.last_heartbeat || '--') + '</div>';
-
-            var dsHtml = '';
-            (data.data_sources || []).forEach(function(ds) {
-                var cls = statusClass(ds.status);
-                var icon = statusIcon(ds.status);
-                var extra = '';
-                if (ds.consecutive_failures > 0) {
-                    extra = ' <span style="color:#fa8c16;font-size:11px">' + ds.consecutive_failures + '次失败</span>';
-                }
-                dsHtml += '<div><span class="' + cls + '">' + icon + '</span> ' + ds.name + extra +
-                    ' <span style="color:#999;font-size:11px">' + (ds.last_success_time || '--') + '</span></div>';
-            });
-            if (!dsHtml) dsHtml = '<div style="color:#999">暂无记录</div>';
-            document.getElementById('datasource-status').innerHTML = dsHtml;
-
-            var stats = (data.notifications || {}).today_stats || {};
-            document.getElementById('notification-status').innerHTML =
-                '<div style="font-size:13px;line-height:1.8">' +
-                '今日发送: ' + (stats.total || 0) + '次<br>' +
-                '<span class="status-ok">成功: ' + (stats.success || 0) + '</span><br>' +
-                '<span class="status-error">失败: ' + (stats.fail || 0) + '</span></div>';
-
-            var tbody = document.querySelector('#execution-table tbody');
-            tbody.innerHTML = '';
-            (data.strategy_execution || []).forEach(function(se) {
-                var statusTd = '<span class="' + statusClass(se.last_status) + '">' + se.last_status + '</span>';
-                tbody.innerHTML += '<tr><td>' + se.strategy_name + '</td><td>' + (se.last_trigger_time || '--') +
-                    '</td><td>' + statusTd + '</td><td>' + formatDuration(se.last_duration_ms) +
-                    '</td><td>' + (se.today_count || 0) + '</td></tr>';
-            });
-            if (!data.strategy_execution || !data.strategy_execution.length) {
-                tbody.innerHTML = '<tr><td colspan="5" class="empty">暂无记录</td></tr>';
+    /* ===== App 组件 ===== */
+    function App() {
+        return {
+            activeTab: 'status',
+            switchTab(tab) {
+                this.activeTab = tab;
+            },
+            init() {
+                // 根级初始化
             }
-
-            var trendDiv = document.getElementById('execution-trend');
-            trendDiv.innerHTML = '';
-            var maxMs = 30000;
-            (data.execution_trend || []).reverse().forEach(function(item) {
-                var height = Math.min(item.duration_ms / maxMs * 100, 100);
-                var color = item.duration_ms > 30000 ? '#f5222d' : '#1890ff';
-                var timeShort = (item.trigger_time || '').split(' ')[1] || '';
-                timeShort = timeShort.substring(0, 5);
-                trendDiv.innerHTML += '<div class="bar" style="height:' + Math.max(height, 3) + '%;background:' + color +
-                    '"><span class="bar-label">' + timeShort + '</span></div>';
-            });
-            if (!data.execution_trend || !data.execution_trend.length) {
-                trendDiv.innerHTML = '<p class="empty">暂无数据</p>';
-            }
-
-            var alertDiv = document.getElementById('alert-events');
-            var alertHtml = '';
-            (data.alert_events || []).forEach(function(e) {
-                alertHtml += '<div style="margin-bottom:6px;font-size:12px">' +
-                    '<span class="level-' + e.level + '">' + e.level + '</span> ' +
-                    '<span style="color:#999">' + (e.timestamp || '') + '</span> ' +
-                    '<span style="color:#666">[' + e.source + ']</span> ' + e.message + '</div>';
-            });
-            alertDiv.innerHTML = alertHtml || '<p class="empty">暂无告警</p>';
-
-            var ntbody = document.querySelector('#notification-logs-table tbody');
-            ntbody.innerHTML = '';
-            (data.notification_logs || []).forEach(function(nl) {
-                var statusTd = '<span class="' + statusClass(nl.status) + '">' + nl.status + '</span>';
-                ntbody.innerHTML += '<tr><td>' + (nl.timestamp || '--') + '</td><td>' + nl.channel +
-                    '</td><td>' + nl.event_type + '</td><td>' + statusTd + '</td></tr>';
-            });
-            if (!data.notification_logs || !data.notification_logs.length) {
-                ntbody.innerHTML = '<tr><td colspan="4" class="empty">暂无记录</td></tr>';
-            }
-        }).catch(function(err) {
-            document.getElementById('status-refresh-time').textContent = '刷新失败: ' + err;
-        });
+        };
     }
 
-    refreshStatus();
-    setInterval(refreshStatus, 60000);
+    /* ===== DataTable 通用分页表格组件 ===== */
+    function DataTable(props) {
+        return {
+            $template: '#data-table-tpl',
 
-    function refreshMutedFunds() {
-        fetch('/api/muted_funds').then(function(r) { return r.json(); }).then(function(data) {
-            var tbody = document.querySelector('#muted-funds-table tbody');
-            tbody.innerHTML = '';
-            if (data && data.length > 0) {
-                data.forEach(function(f) {
-                    tbody.innerHTML += '<tr><td>' + f.code + '</td><td>' + (f.name || '') +
-                        '</td><td>' + f.mute_reason + '</td><td>' + f.muted_until +
-                        '</td><td><button class="unmute-btn" data-code="' + f.code + '">解除</button></td></tr>';
+            // 从props解构
+            apiUrl: props.apiUrl,
+            columns: props.columns,
+            searchPlaceholder: props.searchPlaceholder || '搜索...',
+            defaultSortBy: props.defaultSortBy || '',
+
+            // 状态
+            items: [],
+            total: 0,
+            page: 1,
+            pageSize: 20,
+            totalPages: 0,
+            search: '',
+            loading: false,
+
+            // 初始化
+            dtInit() {
+                this.fetchData();
+            },
+
+            // 请求分页数据
+            fetchData() {
+                var self = this;
+                self.loading = true;
+                var params = new URLSearchParams({
+                    page: self.page,
+                    page_size: self.pageSize
                 });
-                document.getElementById('muted-funds-empty').style.display = 'none';
-            } else {
-                tbody.innerHTML = '';
-                document.getElementById('muted-funds-empty').style.display = 'block';
+                if (self.search) params.set('search', self.search);
+                if (self.defaultSortBy) {
+                    params.set('sort_by', self.defaultSortBy);
+                    params.set('sort_order', 'DESC');
+                }
+
+                fetch(self.apiUrl + '?' + params.toString())
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        self.items = data.items || [];
+                        self.total = data.total || 0;
+                        self.page = data.page || 1;
+                        self.pageSize = data.page_size || 20;
+                        self.totalPages = data.total_pages || 0;
+                        self.loading = false;
+                    })
+                    .catch(function() {
+                        self.items = [];
+                        self.total = 0;
+                        self.totalPages = 0;
+                        self.loading = false;
+                    });
+            },
+
+            // 切换页码
+            changePage(n) {
+                if (n < 1 || n > this.totalPages) return;
+                this.page = n;
+                this.fetchData();
+            },
+
+            // 切换每页条数
+            changePageSize(s) {
+                this.pageSize = parseInt(s);
+                this.page = 1;
+                this.fetchData();
+            },
+
+            // 搜索
+            doSearch() {
+                this.page = 1;
+                this.fetchData();
+            },
+
+            // 获取渲染的页码按钮列表
+            get pageButtons() {
+                var pages = [];
+                var tp = this.totalPages;
+                var cp = this.page;
+                var start = Math.max(1, cp - 3);
+                var end = Math.min(tp, start + 6);
+                start = Math.max(1, end - 6);
+                for (var i = start; i <= end; i++) {
+                    pages.push(i);
+                }
+                return pages;
+            },
+
+            // 获取单元格值，处理嵌套key如 'a.b'
+            getCellValue(row, key) {
+                var parts = key.split('.');
+                var val = row;
+                for (var i = 0; i < parts.length; i++) {
+                    if (val == null) return '';
+                    val = val[parts[i]];
+                }
+                if (val === null || val === undefined) return '';
+                return val;
             }
-            // 绑定解除按钮
-            document.querySelectorAll('.unmute-btn').forEach(function(btn) {
-                btn.onclick = function() { doUnmute(this.getAttribute('data-code')); };
-            });
-        });
+        };
     }
 
-    function doMute(code) {
-        var days = prompt('静默天数:', '7');
-        if (days === null) return;
-        days = parseInt(days);
-        if (isNaN(days) || days <= 0) { alert('请输入有效天数'); return; }
-        fetch('/api/mute', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({fund_code: code, days: days})
-        }).then(function(r) { return r.json(); }).then(function(data) {
-            if (data.ok) { refreshMutedFunds(); }
-            else { alert('静默失败: ' + (data.error || '')); }
-        });
+    /* ===== StatusTab 组件 ===== */
+    function StatusTab() {
+        return {
+            // 系统状态
+            sys: {},
+            dataSources: [],
+            notifStats: {},
+            strategyExec: [],
+            execTrend: [],
+            refreshTime: '',
+
+            // 告警事件分页
+            alertItems: [],
+            alertTotal: 0,
+            alertPage: 1,
+            alertTotalPages: 0,
+
+            // 通知记录分页
+            notifItems: [],
+            notifTotal: 0,
+            notifPage: 1,
+            notifTotalPages: 0,
+
+            // 静默基金分页
+            mutedItems: [],
+            mutedTotal: 0,
+            mutedPage: 1,
+            mutedPageSize: 20,
+            mutedTotalPages: 0,
+            mutedSearch: '',
+            mutedLoading: false,
+
+            // 定时器句柄
+            _timer: null,
+
+            // 初始化
+            statusInit() {
+                this.refreshStatus();
+                this.fetchMutedFunds();
+                var self = this;
+                this._timer = setInterval(function() {
+                    self.refreshStatus();
+                    self.fetchMutedFunds();
+                }, 60000);
+            },
+
+            // 刷新状态数据
+            refreshStatus() {
+                var self = this;
+                var params = new URLSearchParams({
+                    alert_page: self.alertPage,
+                    alert_page_size: 20,
+                    notif_page: self.notifPage,
+                    notif_page_size: 20
+                });
+                fetch('/api/status?' + params.toString())
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        self.sys = data.system || {};
+                        self.dataSources = data.data_sources || [];
+                        self.notifStats = (data.notifications || {}).today_stats || {};
+                        self.strategyExec = data.strategy_execution || [];
+                        self.execTrend = data.execution_trend || [];
+                        self.refreshTime = new Date().toLocaleTimeString();
+
+                        // 告警分页
+                        var ae = data.alert_events || {};
+                        self.alertItems = ae.items || [];
+                        self.alertTotal = ae.total || 0;
+                        self.alertPage = ae.page || 1;
+                        self.alertTotalPages = ae.total_pages || 0;
+
+                        // 通知分页
+                        var nl = data.notification_logs || {};
+                        self.notifItems = nl.items || [];
+                        self.notifTotal = nl.total || 0;
+                        self.notifPage = nl.page || 1;
+                        self.notifTotalPages = nl.total_pages || 0;
+                    })
+                    .catch(function() {
+                        self.refreshTime = '刷新失败';
+                    });
+            },
+
+            // 获取静默基金列表
+            fetchMutedFunds() {
+                var self = this;
+                self.mutedLoading = true;
+                var params = new URLSearchParams({
+                    page: self.mutedPage,
+                    page_size: self.mutedPageSize
+                });
+                if (self.mutedSearch) params.set('search', self.mutedSearch);
+
+                fetch('/api/muted_funds?' + params.toString())
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        self.mutedItems = data.items || [];
+                        self.mutedTotal = data.total || 0;
+                        self.mutedPage = data.page || 1;
+                        self.mutedTotalPages = data.total_pages || 0;
+                        self.mutedLoading = false;
+                    })
+                    .catch(function() {
+                        self.mutedItems = [];
+                        self.mutedTotal = 0;
+                        self.mutedTotalPages = 0;
+                        self.mutedLoading = false;
+                    });
+            },
+
+            // 告警翻页
+            changeAlertPage(n) {
+                if (n < 1 || n > this.alertTotalPages) return;
+                this.alertPage = n;
+                this.refreshStatus();
+            },
+
+            // 通知翻页
+            changeNotifPage(n) {
+                if (n < 1 || n > this.notifTotalPages) return;
+                this.notifPage = n;
+                this.refreshStatus();
+            },
+
+            // 静默基金翻页
+            mutedChangePage(n) {
+                if (n < 1 || n > this.mutedTotalPages) return;
+                this.mutedPage = n;
+                this.fetchMutedFunds();
+            },
+
+            mutedChangePageSize(s) {
+                this.mutedPageSize = parseInt(s);
+                this.mutedPage = 1;
+                this.fetchMutedFunds();
+            },
+
+            mutedDoSearch() {
+                this.mutedPage = 1;
+                this.fetchMutedFunds();
+            },
+
+            // 静默基金页码按钮
+            get mutedPageButtons() {
+                var pages = [];
+                var tp = this.mutedTotalPages;
+                var cp = this.mutedPage;
+                var start = Math.max(1, cp - 3);
+                var end = Math.min(tp, start + 6);
+                start = Math.max(1, end - 6);
+                for (var i = start; i <= end; i++) {
+                    pages.push(i);
+                }
+                return pages;
+            },
+
+            // 执行趋势反转（最新在右）
+            get execTrendReversed() {
+                return (this.execTrend || []).slice().reverse();
+            },
+
+            // 格式化时间短格式
+            formatTimeShort(timeStr) {
+                if (!timeStr) return '';
+                var parts = timeStr.split(' ');
+                if (parts.length > 1) return parts[1].substring(0, 5);
+                return '';
+            },
+
+            // 静默操作
+            doMute(code) {
+                var days = prompt('静默天数:', '7');
+                if (days === null) return;
+                days = parseInt(days);
+                if (isNaN(days) || days <= 0) { alert('请输入有效天数'); return; }
+                var self = this;
+                fetch('/api/mute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fund_code: code, days: days })
+                }).then(function(r) { return r.json(); }).then(function(data) {
+                    if (data.ok) {
+                        self.fetchMutedFunds();
+                    } else {
+                        alert('静默失败: ' + (data.error || ''));
+                    }
+                });
+            },
+
+            // 解除静默
+            doUnmute(code) {
+                if (!confirm('确认解除基金 ' + code + ' 的静默？')) return;
+                var self = this;
+                fetch('/api/unmute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fund_code: code })
+                }).then(function(r) { return r.json(); }).then(function(data) {
+                    if (data.ok) {
+                        self.fetchMutedFunds();
+                    } else {
+                        alert('解除失败: ' + (data.error || ''));
+                    }
+                });
+            }
+        };
     }
 
-    function doUnmute(code) {
-        if (!confirm('确认解除基金 ' + code + ' 的静默？')) return;
-        fetch('/api/unmute', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({fund_code: code})
-        }).then(function(r) { return r.json(); }).then(function(data) {
-            if (data.ok) { refreshMutedFunds(); }
-            else { alert('解除失败: ' + (data.error || '')); }
-        });
+    /* ===== DataTab 组件 ===== */
+    function DataTab() {
+        return {
+            // 静默操作（从业务数据表静默基金）
+            doMute(code) {
+                var days = prompt('静默天数:', '7');
+                if (days === null) return;
+                days = parseInt(days);
+                if (isNaN(days) || days <= 0) { alert('请输入有效天数'); return; }
+                fetch('/api/mute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fund_code: code, days: days })
+                }).then(function(r) { return r.json(); }).then(function(data) {
+                    if (!data.ok) alert('静默失败: ' + (data.error || ''));
+                });
+            }
+        };
     }
 
-    refreshMutedFunds();
-    setInterval(refreshMutedFunds, 60000);
+    /* ===== ConfigTab 组件 ===== */
+    function ConfigTab() {
+        return {
+            allItems: [],
+            categories: {},
+            collapsedCategories: {},
+            collapsedSections: {},
+            saveMsg: {},
+            configLoaded: false,
 
-    // 初始化绑定业务数据tab中的静默按钮
-    document.querySelectorAll('.mute-btn').forEach(function(btn) {
-        btn.onclick = function() { doMute(this.getAttribute('data-code')); };
-    });
+            // 分类名映射
+            categoryNames: {
+                'strategy': '策略配置',
+                'notify': '通知配置',
+                'risk': '风控配置',
+                'system': '系统配置'
+            },
+
+            // 分类显示顺序
+            categoryOrder: ['strategy', 'notify', 'risk', 'system'],
+
+            // 初始化
+            configInit() {
+                this.loadConfig();
+            },
+
+            // 加载配置
+            loadConfig() {
+                var self = this;
+                fetch('/api/config')
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (!data.ok) return;
+                        self.allItems = data.items || [];
+                        self.groupItems();
+                        self.configLoaded = true;
+                    });
+            },
+
+            // 按分类和section分组
+            groupItems() {
+                var cats = {};
+                for (var i = 0; i < this.allItems.length; i++) {
+                    var item = this.allItems[i];
+                    var cat = item.category || 'other';
+                    var sec = item.section || 'default';
+                    if (!cats[cat]) cats[cat] = {};
+                    if (!cats[cat][sec]) cats[cat][sec] = [];
+                    cats[cat][sec].push(item);
+                }
+                this.categories = cats;
+            },
+
+            // 切换分类折叠
+            toggleCategory(cat) {
+                this.collapsedCategories[cat] = !this.collapsedCategories[cat];
+            },
+
+            isCategoryCollapsed(cat) {
+                return !!this.collapsedCategories[cat];
+            },
+
+            // 切换section折叠
+            toggleSection(cat, sec) {
+                var key = cat + '.' + sec;
+                this.collapsedSections[key] = !this.collapsedSections[key];
+            },
+
+            isSectionCollapsed(cat, sec) {
+                return !!this.collapsedSections[cat + '.' + sec];
+            },
+
+            // 获取有序的分类列表
+            get orderedCategories() {
+                var self = this;
+                var result = [];
+                for (var i = 0; i < self.categoryOrder.length; i++) {
+                    var cat = self.categoryOrder[i];
+                    if (self.categories[cat]) result.push(cat);
+                }
+                var keys = Object.keys(self.categories);
+                for (var j = 0; j < keys.length; j++) {
+                    if (result.indexOf(keys[j]) === -1) result.push(keys[j]);
+                }
+                return result;
+            },
+
+            // 获取分类显示名
+            getCategoryName(cat) {
+                return this.categoryNames[cat] || cat;
+            },
+
+            // 获取控件类型
+            getInputType(item) {
+                var vt = (item.value_type || 'string').toLowerCase();
+                if (vt === 'bool' || vt === 'boolean') return 'checkbox';
+                if (vt === 'int' || vt === 'integer') return 'number';
+                if (vt === 'float') return 'number';
+                return 'text';
+            },
+
+            // 获取数字步长
+            getInputStep(item) {
+                var vt = (item.value_type || 'string').toLowerCase();
+                if (vt === 'float') return '0.1';
+                return '1';
+            },
+
+            // 获取布尔值
+            getBoolValue(item) {
+                return item.value === true || item.value === 'true' || item.value === '1';
+            },
+
+            // 更新配置值
+            onValueChange(item, event) {
+                var type = this.getInputType(item);
+                if (type === 'checkbox') {
+                    item.value = event.target.checked;
+                } else if (type === 'number') {
+                    var vt = (item.value_type || 'string').toLowerCase();
+                    item.value = vt === 'float' ? parseFloat(event.target.value) : parseInt(event.target.value);
+                } else {
+                    item.value = event.target.value;
+                }
+                item._modified = true;
+            },
+
+            // 保存某个分类
+            saveCategory(cat) {
+                var self = this;
+                var items = [];
+                var secs = self.categories[cat] || {};
+                for (var sec in secs) {
+                    if (!secs.hasOwnProperty(sec)) continue;
+                    for (var i = 0; i < secs[sec].length; i++) {
+                        var item = secs[sec][i];
+                        if (item._modified) {
+                            items.push({
+                                category: item.category,
+                                section: item.section,
+                                key: item.key,
+                                value: String(item.value)
+                            });
+                        }
+                    }
+                }
+                if (items.length === 0) {
+                    self.saveMsg[cat] = { text: '无变更', cls: 'err' };
+                    return;
+                }
+                fetch('/api/config', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: items })
+                }).then(function(r) { return r.json(); }).then(function(data) {
+                    if (data.ok) {
+                        self.saveMsg[cat] = { text: '保存成功(' + data.updated + '项)', cls: 'ok' };
+                        for (var sec in secs) {
+                            if (!secs.hasOwnProperty(sec)) continue;
+                            for (var i = 0; i < secs[sec].length; i++) {
+                                secs[sec][i]._modified = false;
+                            }
+                        }
+                    } else {
+                        self.saveMsg[cat] = { text: '保存失败: ' + (data.error || ''), cls: 'err' };
+                    }
+                }).catch(function() {
+                    self.saveMsg[cat] = { text: '请求失败', cls: 'err' };
+                });
+            },
+
+            // 手动重载配置
+            reloadConfig() {
+                var self = this;
+                fetch('/api/config/reload', { method: 'POST' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data.ok) {
+                            self.loadConfig();
+                            alert('配置已重载');
+                        } else {
+                            alert('重载失败: ' + (data.error || ''));
+                        }
+                    });
+            }
+        };
+    }
+
+    /* ===== 挂载 Petite-Vue 应用 ===== */
+    PetiteVue.createApp().mount();
     </script>
+{% endraw %}
 </body>
 </html>
