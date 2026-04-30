@@ -99,32 +99,20 @@ class DataCollector:
         Raises:
             RuntimeError: 主源和备用源均失败时抛出
         """
-        # 查询当前连续失败次数，决定是否直接走备用源
-        source_status = self._storage.get_data_source_status("lof_list")
-        consecutive = 0
-        if source_status is not None:
-            consecutive = source_status.get("consecutive_failures", 0)
-
-        # 连续失败未达阈值，先尝试主源
-        if consecutive < self._max_failures:
-            try:
-                result = self._fetch_lof_list_primary()
-                # 主源成功，重置失败计数
-                self._storage.update_data_source_status("lof_list", "ok")
-                return result
-            except Exception:
-                # 主源失败，记录失败次数
-                fail_count = self._storage.record_data_source_failure("lof_list")
-                if fail_count >= self._max_failures:
-                    logger.warning(
-                        "LOF基金列表主源连续失败%d次，达到阈值，切换备用源",
-                        fail_count,
-                    )
-        else:
-            logger.warning(
-                "LOF基金列表主源连续失败已达阈值(%d次)，直接使用备用源",
-                consecutive,
-            )
+        # 始终先尝试主源（即使之前达到阈值也尝试一次，以便接口恢复后自动恢复）
+        try:
+            result = self._fetch_lof_list_primary()
+            # 主源成功，重置失败计数
+            self._storage.update_data_source_status("lof_list", "ok")
+            return result
+        except Exception:
+            # 主源失败，记录失败次数
+            fail_count = self._storage.record_data_source_failure("lof_list")
+            if fail_count >= self._max_failures:
+                logger.warning(
+                    "LOF基金列表主源连续失败%d次，达到阈值，切换备用源",
+                    fail_count,
+                )
 
         # 尝试备用源
         try:

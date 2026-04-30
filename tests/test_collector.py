@@ -84,7 +84,7 @@ def test_collector_primary_success_resets_failures():
 
 
 def test_collector_switch_after_max_failures():
-    """连续失败达到阈值后应直接走备用源"""
+    """连续失败达到阈值后仍会尝试主源（接口恢复后自动恢复），失败后走备用源"""
     collector = _create_collector(max_failures=2)
 
     # 第一次主源失败
@@ -104,21 +104,18 @@ def test_collector_switch_after_max_failures():
             assert len(result) == 1
             assert result[0]["code"] == "501050"
 
-    # 第三次，连续失败已超阈值，直接走备用源（不再调用主源）
-    primary_called = {"value": False}
+    # 第三次，即使超过阈值也会尝试主源；主源恢复后自动切回
+    with patch.object(collector, "_fetch_lof_list_primary", return_value=[
+        {"code": "164906", "name": "恢复", "status": "normal", "is_suspended": False, "daily_volume": 0.0},
+    ]):
+        result = collector.fetch_lof_fund_list()
+        assert len(result) == 1
+        assert result[0]["code"] == "164906"
 
-    def mock_primary_should_not_call(*args, **kwargs):
-        primary_called["value"] = True
-        raise Exception("不应被调用")
-
-    with patch.object(collector, "_fetch_lof_list_primary", mock_primary_should_not_call):
-        with patch.object(collector, "_fetch_lof_list_fallback", return_value=[
-            {"code": "501050", "name": "备用", "status": "normal", "is_suspended": False, "daily_volume": 500.0},
-        ]):
-            result = collector.fetch_lof_fund_list()
-            assert len(result) == 1
-            # 主源不应被调用
-            assert not primary_called["value"]
+    # 主源成功后失败计数应重置
+    status = collector._storage.get_data_source_status("lof_list")
+    assert status["status"] == "ok"
+    assert status["consecutive_failures"] == 0
 
 
 def test_collector_both_fail_raises():
