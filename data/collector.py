@@ -300,6 +300,70 @@ class DataCollector:
         self._storage.update_data_source_status("lof_iopv", "ok")
         return result
 
+    # ==================== LOF申购状态 ====================
+
+    def fetch_lof_purchase_status(self) -> Dict[str, Dict]:
+        """获取LOF基金申购状态信息
+
+        调用akshare的fund_purchase_em接口获取全市场基金申购信息，
+        筛选LOF基金，返回每只LOF的申购状态、限额和费率。
+
+        Returns:
+            字典，key为纯数字基金代码，value为申购信息字典：
+            {
+                "purchase_status": "正常申购" | "限大额" | "暂停申购",
+                "purchase_limit": float,  # 申购累计限额（元），0表示无限制
+                "purchase_fee_rate": float,  # 申购费率（小数）
+            }
+        """
+        try:
+            import akshare as ak
+            df = ak.fund_purchase_em()
+            if df is None or df.empty:
+                logger.warning("fund_purchase_em返回空数据")
+                return {}
+
+            result = {}
+            for _, row in df.iterrows():
+                # 只筛选LOF基金
+                fund_type = str(row.get("基金类型", "")).strip()
+                if fund_type != "LOF":
+                    continue
+
+                code = str(row.get("基金代码", "")).strip()
+                if not code:
+                    continue
+
+                purchase_status = str(row.get("申购状态", "")).strip()
+                # 申购累计限额
+                limit_val = row.get("申购累计限额", 0)
+                try:
+                    purchase_limit = float(limit_val) if limit_val else 0.0
+                except (ValueError, TypeError):
+                    purchase_limit = 0.0
+
+                # 购买费率，如"0.15%"转为0.0015
+                fee_str = str(row.get("购买费率", "0")).strip().replace("%", "")
+                try:
+                    purchase_fee_rate = float(fee_str) / 100.0 if fee_str else 0.0
+                except (ValueError, TypeError):
+                    purchase_fee_rate = 0.0
+
+                result[code] = {
+                    "purchase_status": purchase_status,
+                    "purchase_limit": purchase_limit,
+                    "purchase_fee_rate": purchase_fee_rate,
+                }
+
+            logger.info("获取LOF申购状态完成，共%d只LOF基金", len(result))
+            self._storage.update_data_source_status("lof_purchase", "ok")
+            return result
+        except Exception as ex:
+            logger.error("获取LOF申购状态失败: %s", ex)
+            fail_count = self._storage.record_data_source_failure("lof_purchase", str(ex)[:200])
+            self._alert_data_source_failure("lof_purchase", fail_count, str(ex))
+            return {}
+
     # ==================== 可转债申购 ====================
 
     def fetch_bond_ipo_list(self) -> List[Dict]:
