@@ -5,11 +5,12 @@
 
 ## 背景
 
-部分LOF基金虽有溢价但实际无法申购（暂停申购或限购金额太小无法套利），导致系统产生无效信号。需要提供一种机制让用户在看板上快速静默这些基金，设定静默天数后不再触发信号通知。
+部分LOF基金虽有溢价但实际无法申购（暂停申购或限购金额太小无法套利），导致系统产生无效信号。需要提供自动+手动两种静默机制，减少无效信号干扰。
 
 ## 设计目标
 
-- 看板上可一键静默基金，设定静默天数
+- 系统启动时自动从akshare获取申购状态，将暂停申购和限额过低的基金自动静默
+- 用户可在看板上手动静默基金，设定静默天数
 - 静默期间该基金不产生信号、不发通知，但溢价历史照常记录
 - 静默到期后自动恢复
 - 可手动提前解除静默
@@ -20,6 +21,7 @@
 
 新增字段：
 - `muted_until TEXT NOT NULL DEFAULT ''` — 静默到期时间，空串表示不静默
+- `mute_reason TEXT NOT NULL DEFAULT ''` — 静默原因，如"暂停申购"、"限额过低(2万)"、"手动静默"
 
 `status` 字段使用 `muted` 值标记静默状态（现有值：`normal`、`suspended`）。
 
@@ -27,15 +29,49 @@ init_db 中加 ALTER TABLE 兼容迁移。
 
 ### Storage 层新增方法
 
-- `mute_fund(code, muted_until)` — 设置 status='muted' + muted_until
-- `unmute_fund(code)` — 恢复 status='normal' + 清空 muted_until
+- `mute_fund(code, muted_until, reason="")` — 设置 status='muted' + muted_until + mute_reason
+- `unmute_fund(code)` — 恢复 status='normal' + 清空 muted_until 和 mute_reason
 - `list_muted_funds()` — 查询所有 status='muted' 的基金
+
+## 自动静默：DataCollector新增方法
+
+### fetch_lof_purchase_status()
+
+调用 `akshare.fund_purchase_em()` 获取全市场基金申购信息，筛选LOF基金，返回每只LOF的申购状态和限额。
+
+返回格式：`Dict[str, Dict]`，key为纯数字基金代码，value为：
+```python
+{
+    "purchase_status": "正常申购" | "限大额" | "暂停申购",
+    "purchase_limit": float,  # 申购累计限额（元），0表示无限制
+}
+```
+
+### 自动静默逻辑
+
+在 `main.py` 系统启动时，调用 `collector.fetch_lof_purchase_status()` 获取申购数据，按以下规则自动静默：
+
+1. **暂停申购** → 自动静默30天（暂停申购通常不会短期恢复）
+2. **限额 < min_purchase_limit** → 自动静默到当天结束（限额可能每日变化，不设长期静默）
+   - `min_purchase_limit` 默认 100000（10万元），可通过 config.yaml 的 `lof_premium.min_purchase_limit` 配置
+3. 已静默且 muted_until 尚未到期的基金，不重复静默（保留用户手动设置的静默）
+4. 自动静默不覆盖手动静默（通过 mute_reason 区分：自动静默以"暂停申购"/"限额过低"开头，手动静默为"手动静默"）
+
+### 配置项
+
+在 `config.yaml` 的 `lof_premium` 段新增：
+```yaml
+lof_premium:
+  auto_mute_enabled: true        # 是否启用自动静默
+  min_purchase_limit: 100000      # 最低申购限额（元），低于此值自动静默
+  auto_mute_paused_days: 30       # 暂停申购自动静默天数
+```
 
 ## 策略层
 
 在 `LofPremiumStrategy.execute()` 中，信号生成前（`signal_gen.check()` 之前）增加检查：
 
-- 如果该基金在 `active_funds` 中且其 `status='muted'` 且 `muted_until > 当前时间`，跳过信号（不写 trade_signal，不发通知）
+- 如果该基金 `status='muted'` 且 `muted_until > 当前时间`，跳过信号（不写 trade_signal，不发通知）
 - 如果 `muted_until <= 当前时间`（已过期），自动恢复为 `status='normal'`
 
 溢价历史数据照常记录（`insert_premium_history`），仅跳过信号和通知。
@@ -48,7 +84,7 @@ init_db 中加 ALTER TABLE 兼容迁移。
 
 请求体：`{"fund_code": "sz162719", "days": 7}`
 
-逻辑：计算 muted_until = 当前日期 + days天，调用 `storage.mute_fund(code, muted_until)`
+逻辑：计算 muted_until = 当前日期 + days天，调用 `storage.mute_fund(code, muted_until, "手动静默")`
 
 ### POST /api/unmute
 
@@ -56,8 +92,12 @@ init_db 中加 ALTER TABLE 兼容迁移。
 
 逻辑：调用 `storage.unmute_fund(code)`
 
+### GET /api/muted_funds
+
+返回所有当前静默中的基金列表（代码、名称、原因、到期时间）。
+
 ### 看板改造
 
 - LOF溢价率监控表格增加"操作"列，显示"静默"按钮
 - 点击后弹出输入框填写静默天数，确认后调用 `/api/mute`
-- 状态总览页增加"已静默基金"区块，列出基金代码、名称、到期时间，可点"解除"
+- 状态总览页增加"已静默基金"区块，列出基金代码、名称、原因、到期时间，可点"解除"
