@@ -7,7 +7,13 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: "Microsoft YaHei", sans-serif; background: #f5f5f5; color: #333; padding: 20px; }
-        h1 { text-align: center; margin-bottom: 24px; font-size: 24px; color: #222; }
+        h1 { text-align: center; margin-bottom: 16px; font-size: 24px; color: #222; }
+        .tabs { display: flex; border-bottom: 2px solid #e8e8e8; margin-bottom: 20px; }
+        .tab { padding: 10px 24px; cursor: pointer; font-size: 15px; color: #666; border-bottom: 3px solid transparent; transition: all 0.2s; }
+        .tab.active { color: #1890ff; border-bottom-color: #1890ff; font-weight: 600; }
+        .tab:hover { color: #1890ff; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
         .section { background: #fff; border-radius: 6px; padding: 16px 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         .section h2 { font-size: 16px; color: #444; margin-bottom: 12px; border-left: 3px solid #1890ff; padding-left: 8px; }
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -15,219 +21,235 @@
         th { background: #fafafa; color: #666; font-weight: 600; }
         tr:hover td { background: #f0f7ff; }
         .empty { color: #999; padding: 12px 0; font-size: 13px; }
+        .status-cards { display: flex; gap: 12px; margin-bottom: 16px; }
+        .status-card { flex: 1; background: #fff; border-radius: 6px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .status-card h3 { font-size: 13px; color: #999; margin-bottom: 8px; }
+        .status-ok { color: #52c41a; }
+        .status-warn { color: #fa8c16; }
+        .status-error { color: #f5222d; }
+        .level-ERROR { background: #f5222d; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 11px; }
+        .level-WARN { background: #fa8c16; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 11px; }
+        .level-INFO { background: #1890ff; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 11px; }
+        .level-OK { background: #52c41a; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 11px; }
+        .bar-chart { height: 80px; display: flex; align-items: flex-end; gap: 4px; padding: 8px 0; }
+        .bar-chart .bar { flex: 1; border-radius: 2px 2px 0 0; min-width: 8px; position: relative; }
+        .bar-chart .bar .bar-label { position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%); font-size: 10px; color: #999; white-space: nowrap; }
+        .refresh-info { text-align: right; font-size: 12px; color: #999; margin-bottom: 8px; }
     </style>
 </head>
 <body>
     <h1>个人量化套利中枢</h1>
 
-    <!-- LOF溢价率监控 -->
-    <div class="section">
-        <h2>LOF溢价率监控</h2>
-        {% if premium_history %}
-        <table>
-            <thead>
-                <tr>
-                    <th>时间</th>
-                    <th>基金代码</th>
-                    <th>市价</th>
-                    <th>IOPV</th>
-                    <th>溢价率(%)</th>
-                    <th>IOPV来源</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in premium_history %}
-                <tr>
-                    <td>{{ row['timestamp'] }}</td>
-                    <td>{{ row['fund_code'] }}</td>
-                    <td>{{ row['price'] }}</td>
-                    <td>{{ row['iopv'] }}</td>
-                    <td>{{ "%.2f"|format(row['premium_rate']) }}</td>
-                    <td>{{ row['iopv_source'] }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="empty">暂无数据</p>
-        {% endif %}
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('status', this)">状态总览</div>
+        <div class="tab" onclick="switchTab('data', this)">业务数据</div>
     </div>
 
-    <!-- LOF套利信号 -->
-    <div class="section">
-        <h2>LOF套利信号</h2>
-        {% if signals %}
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>触发时间</th>
-                    <th>基金代码</th>
-                    <th>溢价率(%)</th>
-                    <th>动作</th>
-                    <th>状态</th>
-                    <th>IOPV来源</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in signals %}
-                <tr>
-                    <td>{{ row['id'] }}</td>
-                    <td>{{ row['trigger_time'] }}</td>
-                    <td>{{ row['fund_code'] }}</td>
-                    <td>{{ row['premium_rate'] }}</td>
-                    <td>{{ row['action'] }}</td>
-                    <td>{{ row['status'] }}</td>
-                    <td>{{ row['iopv_source'] }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="empty">暂无数据</p>
-        {% endif %}
+    <!-- 状态总览 -->
+    <div id="tab-status" class="tab-content active">
+        <div class="refresh-info" id="status-refresh-time"></div>
+
+        <!-- 第一行：3个状态卡片 -->
+        <div class="status-cards" id="status-cards">
+            <div class="status-card" id="card-system">
+                <h3>系统健康</h3>
+                <div id="system-status">加载中...</div>
+            </div>
+            <div class="status-card" id="card-datasource">
+                <h3>数据源状态</h3>
+                <div id="datasource-status">加载中...</div>
+            </div>
+            <div class="status-card" id="card-notification">
+                <h3>通知渠道状态</h3>
+                <div id="notification-status">加载中...</div>
+            </div>
+        </div>
+
+        <!-- 第二行：执行概况 + 耗时趋势 -->
+        <div style="display:flex;gap:12px;margin-bottom:20px">
+            <div style="flex:1" class="section">
+                <h2>策略执行概况</h2>
+                <table id="execution-table">
+                    <thead><tr><th>策略</th><th>上次执行</th><th>结果</th><th>耗时</th><th>今日次数</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div style="flex:1" class="section">
+                <h2>执行耗时趋势(LOF溢价)</h2>
+                <div id="execution-trend" class="bar-chart"></div>
+                <div style="font-size:11px;color:#999;margin-top:20px">红色柱 = 超过阈值(30s)</div>
+            </div>
+        </div>
+
+        <!-- 第三行：告警流 + 通知记录 -->
+        <div style="display:flex;gap:12px;margin-bottom:20px">
+            <div style="flex:1" class="section">
+                <h2>告警事件流</h2>
+                <div id="alert-events"><p class="empty">加载中...</p></div>
+            </div>
+            <div style="flex:1" class="section">
+                <h2>通知发送记录</h2>
+                <table id="notification-logs-table">
+                    <thead><tr><th>时间</th><th>渠道</th><th>事件</th><th>状态</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
-    <!-- 可转债打新 -->
-    <div class="section">
-        <h2>可转债打新</h2>
-        {% if bond_ipos %}
-        <table>
-            <thead>
-                <tr>
-                    <th>代码</th>
-                    <th>名称</th>
-                    <th>申购日期</th>
-                    <th>中签结果</th>
-                    <th>缴款状态</th>
-                    <th>上市日期</th>
-                    <th>卖出状态</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in bond_ipos %}
-                <tr>
-                    <td>{{ row['code'] }}</td>
-                    <td>{{ row['name'] }}</td>
-                    <td>{{ row['subscribe_date'] }}</td>
-                    <td>{{ row['winning_result'] }}</td>
-                    <td>{{ row['payment_status'] }}</td>
-                    <td>{{ row['listing_date'] }}</td>
-                    <td>{{ row['sell_status'] }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="empty">暂无数据</p>
-        {% endif %}
+    <!-- 业务数据 -->
+    <div id="tab-data" class="tab-content">
+        {% for section in data_sections %}
+        <div class="section">
+            <h2>{{ section.title }}</h2>
+            {% if section.rows %}
+            <table>
+                <thead>
+                    <tr>
+                        {% for col in section.columns %}
+                        <th>{{ col }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in section.rows %}
+                    <tr>
+                        {% for col in section.columns %}
+                        <td>{{ row[col] }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty">暂无数据</p>
+            {% endif %}
+        </div>
+        {% endfor %}
     </div>
 
-    <!-- 可转债配债 -->
-    <div class="section">
-        <h2>可转债配债</h2>
-        {% if allocations %}
-        <table>
-            <thead>
-                <tr>
-                    <th>债券代码</th>
-                    <th>正股代码</th>
-                    <th>正股名称</th>
-                    <th>含权权重</th>
-                    <th>安全垫(%)</th>
-                    <th>股权登记日</th>
-                    <th>配售缴款日</th>
-                    <th>上市日期</th>
-                    <th>状态</th>
-                    <th>实际滑点(%)</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in allocations %}
-                <tr>
-                    <td>{{ row['code'] }}</td>
-                    <td>{{ row['stock_code'] }}</td>
-                    <td>{{ row['stock_name'] }}</td>
-                    <td>{{ row['content_weight'] }}</td>
-                    <td>{{ row['safety_cushion'] }}</td>
-                    <td>{{ row['record_date'] }}</td>
-                    <td>{{ row['payment_date'] }}</td>
-                    <td>{{ row['listing_date'] }}</td>
-                    <td>{{ row['status'] }}</td>
-                    <td>{{ row['actual_slippage'] }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="empty">暂无数据</p>
-        {% endif %}
-    </div>
+    <script>
+    function switchTab(tabName, tabEl) {
+        document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+        document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.remove('active'); });
+        document.querySelector('#tab-' + tabName).classList.add('active');
+        tabEl.classList.add('active');
+    }
 
-    <!-- 逆回购记录 -->
-    <div class="section">
-        <h2>逆回购记录</h2>
-        {% if repos %}
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>日期</th>
-                    <th>代码</th>
-                    <th>利率(%)</th>
-                    <th>金额</th>
-                    <th>到期日</th>
-                    <th>收益</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in repos %}
-                <tr>
-                    <td>{{ row['id'] }}</td>
-                    <td>{{ row['date'] }}</td>
-                    <td>{{ row['code'] }}</td>
-                    <td>{{ row['rate'] }}</td>
-                    <td>{{ row['amount'] }}</td>
-                    <td>{{ row['due_date'] }}</td>
-                    <td>{{ row['profit'] }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="empty">暂无数据</p>
-        {% endif %}
-    </div>
+    function formatUptime(seconds) {
+        if (!seconds) return '--';
+        var h = Math.floor(seconds / 3600);
+        var m = Math.floor((seconds % 3600) / 60);
+        var s = seconds % 60;
+        return h + 'h ' + m + 'm ' + s + 's';
+    }
 
-    <!-- 每日汇总 -->
-    <div class="section">
-        <h2>每日汇总</h2>
-        {% if summaries %}
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>日期</th>
-                    <th>策略类型</th>
-                    <th>收益</th>
-                    <th>操作日志</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in summaries %}
-                <tr>
-                    <td>{{ row['id'] }}</td>
-                    <td>{{ row['date'] }}</td>
-                    <td>{{ row['strategy_type'] }}</td>
-                    <td>{{ row['profit'] }}</td>
-                    <td>{{ row['action_log'] }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="empty">暂无数据</p>
-        {% endif %}
-    </div>
+    function formatDuration(ms) {
+        if (!ms && ms !== 0) return '--';
+        if (ms < 1000) return ms + 'ms';
+        return (ms / 1000).toFixed(1) + 's';
+    }
+
+    function statusClass(status) {
+        if (status === 'ok' || status === 'success') return 'status-ok';
+        if (status === 'failure' || status === 'fail') return 'status-error';
+        if (status === 'skip') return 'status-warn';
+        return '';
+    }
+
+    function statusIcon(status) {
+        if (status === 'ok' || status === 'success') return '●';
+        if (status === 'failure' || status === 'fail') return '●';
+        if (status === 'skip') return '◐';
+        return '○';
+    }
+
+    function refreshStatus() {
+        fetch('/api/status').then(function(r) { return r.json(); }).then(function(data) {
+            document.getElementById('status-refresh-time').textContent = '上次刷新: ' + new Date().toLocaleTimeString();
+
+            var sys = data.system || {};
+            document.getElementById('system-status').innerHTML =
+                '<div style="font-size:18px;font-weight:bold" class="status-ok">● 运行中</div>' +
+                '<div style="font-size:13px;margin-top:6px">运行时长: ' + formatUptime(sys.uptime_seconds) + '</div>' +
+                '<div style="font-size:13px">自检: ' + (sys.selfcheck || 'unknown') + '</div>' +
+                '<div style="font-size:13px">上次心跳: ' + (sys.last_heartbeat || '--') + '</div>';
+
+            var dsHtml = '';
+            (data.data_sources || []).forEach(function(ds) {
+                var cls = statusClass(ds.status);
+                var icon = statusIcon(ds.status);
+                var extra = '';
+                if (ds.consecutive_failures > 0) {
+                    extra = ' <span style="color:#fa8c16;font-size:11px">' + ds.consecutive_failures + '次失败</span>';
+                }
+                dsHtml += '<div><span class="' + cls + '">' + icon + '</span> ' + ds.name + extra +
+                    ' <span style="color:#999;font-size:11px">' + (ds.last_success_time || '--') + '</span></div>';
+            });
+            if (!dsHtml) dsHtml = '<div style="color:#999">暂无记录</div>';
+            document.getElementById('datasource-status').innerHTML = dsHtml;
+
+            var stats = (data.notifications || {}).today_stats || {};
+            document.getElementById('notification-status').innerHTML =
+                '<div style="font-size:13px;line-height:1.8">' +
+                '今日发送: ' + (stats.total || 0) + '次<br>' +
+                '<span class="status-ok">成功: ' + (stats.success || 0) + '</span><br>' +
+                '<span class="status-error">失败: ' + (stats.fail || 0) + '</span></div>';
+
+            var tbody = document.querySelector('#execution-table tbody');
+            tbody.innerHTML = '';
+            (data.strategy_execution || []).forEach(function(se) {
+                var statusTd = '<span class="' + statusClass(se.last_status) + '">' + se.last_status + '</span>';
+                tbody.innerHTML += '<tr><td>' + se.strategy_name + '</td><td>' + (se.last_trigger_time || '--') +
+                    '</td><td>' + statusTd + '</td><td>' + formatDuration(se.last_duration_ms) +
+                    '</td><td>' + (se.today_count || 0) + '</td></tr>';
+            });
+            if (!data.strategy_execution || !data.strategy_execution.length) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty">暂无记录</td></tr>';
+            }
+
+            var trendDiv = document.getElementById('execution-trend');
+            trendDiv.innerHTML = '';
+            var maxMs = 30000;
+            (data.execution_trend || []).reverse().forEach(function(item) {
+                var height = Math.min(item.duration_ms / maxMs * 100, 100);
+                var color = item.duration_ms > 30000 ? '#f5222d' : '#1890ff';
+                var timeShort = (item.trigger_time || '').split(' ')[1] || '';
+                timeShort = timeShort.substring(0, 5);
+                trendDiv.innerHTML += '<div class="bar" style="height:' + Math.max(height, 3) + '%;background:' + color +
+                    '"><span class="bar-label">' + timeShort + '</span></div>';
+            });
+            if (!data.execution_trend || !data.execution_trend.length) {
+                trendDiv.innerHTML = '<p class="empty">暂无数据</p>';
+            }
+
+            var alertDiv = document.getElementById('alert-events');
+            var alertHtml = '';
+            (data.alert_events || []).forEach(function(e) {
+                alertHtml += '<div style="margin-bottom:6px;font-size:12px">' +
+                    '<span class="level-' + e.level + '">' + e.level + '</span> ' +
+                    '<span style="color:#999">' + (e.timestamp || '') + '</span> ' +
+                    '<span style="color:#666">[' + e.source + ']</span> ' + e.message + '</div>';
+            });
+            alertDiv.innerHTML = alertHtml || '<p class="empty">暂无告警</p>';
+
+            var ntbody = document.querySelector('#notification-logs-table tbody');
+            ntbody.innerHTML = '';
+            (data.notification_logs || []).forEach(function(nl) {
+                var statusTd = '<span class="' + statusClass(nl.status) + '">' + nl.status + '</span>';
+                ntbody.innerHTML += '<tr><td>' + (nl.timestamp || '--') + '</td><td>' + nl.channel +
+                    '</td><td>' + nl.event_type + '</td><td>' + statusTd + '</td></tr>';
+            });
+            if (!data.notification_logs || !data.notification_logs.length) {
+                ntbody.innerHTML = '<tr><td colspan="4" class="empty">暂无记录</td></tr>';
+            }
+        }).catch(function(err) {
+            document.getElementById('status-refresh-time').textContent = '刷新失败: ' + err;
+        });
+    }
+
+    refreshStatus();
+    setInterval(refreshStatus, 60000);
+    </script>
 </body>
 </html>
