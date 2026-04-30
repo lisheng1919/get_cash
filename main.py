@@ -152,6 +152,13 @@ def main():
     calendar = TradingCalendar()
     calendar.load_from_storage(storage)
 
+    # 交易日历为空时自动从akshare同步
+    cursor = conn.execute("SELECT COUNT(*) FROM holiday_calendar")
+    holiday_count = cursor.fetchone()[0]
+    if holiday_count == 0:
+        logger.info("交易日历为空，开始从akshare自动同步...")
+        calendar.sync_from_akshare(storage)
+
     # 初始化通知管理器
     notifier = setup_notifier(config)
 

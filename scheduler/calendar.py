@@ -1,7 +1,10 @@
 """交易日历管理模块，提供交易日判断、节前交易日检测等功能"""
 
+import logging
 from datetime import date, timedelta
 from typing import List, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 class TradingCalendar:
@@ -135,3 +138,143 @@ class TradingCalendar:
             if is_pre:
                 holiday_name = row_dict.get("holiday_name", "")
                 self._pre_holidays[d] = holiday_name
+
+    def _infer_holiday_name(self, month: int) -> str:
+        """根据月份推断节假日名称
+
+        Args:
+            month: 月份（1-12）
+
+        Returns:
+            推断的节假日名称
+        """
+        month_name_map = {
+            1: "元旦",
+            2: "春节",
+            4: "清明节",
+            5: "劳动节",
+            6: "端午节",
+            9: "中秋节",
+            10: "国庆节",
+        }
+        return month_name_map.get(month, "节假日")
+
+    def sync_from_akshare(self, storage) -> None:
+        """从akshare同步交易日历数据（增量更新）
+
+        调用akshare获取历史交易日数据，推断非交易日和节前交易日，
+        写入数据库并重新加载到内存。
+
+        Args:
+            storage: Storage 实例，用于数据库读写
+        """
+        # 延迟导入akshare，避免未安装时影响模块加载
+        import akshare as ak
+
+        # 拉取交易日数据
+        df = ak.tool_trade_date_hist_sina()
+        trade_date_strs = set(df["trade_date"].astype(str).tolist())
+        trade_dates = set()
+        for s in trade_date_strs:
+            try:
+                trade_dates.add(date.fromisoformat(s))
+            except (ValueError, TypeError):
+                logger.warning("跳过无效交易日: %s", s)
+
+        if not trade_dates:
+            logger.warning("akshare返回的交易日数据为空，跳过同步")
+            return
+
+        # 确定日期范围：从最早交易日到最晚交易日
+        min_date = min(trade_dates)
+        max_date = max(trade_dates)
+
+        # 增量同步：检查数据库中已有数据的最大日期
+        cursor = storage._conn.execute(
+            "SELECT MAX(date) FROM holiday_calendar"
+        )
+        row = cursor.fetchone()
+        last_synced = None
+        if row and row[0]:
+            last_synced = date.fromisoformat(row[0])
+            # 如果已同步到最后，跳过
+            if last_synced >= max_date:
+                logger.info("交易日历已是最新，无需增量同步")
+                self.load_from_storage(storage)
+                return
+            # 增量同步从已有数据的下一天开始
+            min_date = last_synced + timedelta(days=1)
+
+        logger.info(
+            "开始同步交易日历: %s ~ %s",
+            min_date.strftime("%Y-%m-%d"),
+            max_date.strftime("%Y-%m-%d"),
+        )
+
+        # 推断非交易日：工作日但不在交易日集合中的日期
+        non_trading_dates = set()
+        current = min_date
+        while current <= max_date:
+            # 仅判断工作日（跳过周末）
+            if current.weekday() < 5 and current not in trade_dates:
+                non_trading_dates.add(current)
+            current += timedelta(days=1)
+
+        # 推断节前交易日：交易日后面到下一个交易日之间的日历天数>=3
+        # （正常周末间隔为2天，超过2天即为长假，当前交易日为节前）
+        pre_holiday_dates = {}
+        for td in trade_dates:
+            if td < min_date or td > max_date:
+                continue
+            # 查找下一个交易日
+            next_day = td + timedelta(days=1)
+            calendar_gap = 0
+            check_day = next_day
+            while check_day <= max_date:
+                calendar_gap += 1
+                if check_day in trade_dates:
+                    break
+                check_day += timedelta(days=1)
+            # 日历间隔>=3天（超过正常周末2天），则当前交易日为节前
+            if calendar_gap >= 3:
+                # 查找最近的节假日名称（从后续非交易日中取月份）
+                holiday_name = ""
+                for gap_day in non_trading_dates:
+                    if gap_day > td and gap_day < check_day:
+                        holiday_name = self._infer_holiday_name(gap_day.month)
+                        break
+                pre_holiday_dates[td] = holiday_name
+
+        # 写入数据库：交易日
+        for td in trade_dates:
+            if td < min_date or td > max_date:
+                continue
+            is_pre = td in pre_holiday_dates
+            holiday_name = pre_holiday_dates.get(td, "")
+            storage.upsert_holiday(
+                td.strftime("%Y-%m-%d"),
+                is_trading_day=True,
+                is_pre_holiday=is_pre,
+                holiday_name=holiday_name,
+            )
+
+        # 写入数据库：非交易日（节假日）
+        for ntd in non_trading_dates:
+            if ntd < min_date or ntd > max_date:
+                continue
+            holiday_name = self._infer_holiday_name(ntd.month)
+            storage.upsert_holiday(
+                ntd.strftime("%Y-%m-%d"),
+                is_trading_day=False,
+                is_pre_holiday=False,
+                holiday_name=holiday_name,
+            )
+
+        # 重新加载到内存
+        self.load_from_storage(storage)
+        logger.info(
+            "交易日历同步完成: 交易日=%d, 非交易日=%d, 节前=%d",
+            len(trade_dates),
+            len(non_trading_dates),
+            len(pre_holiday_dates),
+        )
