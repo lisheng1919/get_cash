@@ -50,6 +50,40 @@ class LofPremiumStrategy(BaseStrategy):
         )
         self._auto_trade = config.get("auto_trade", False)
 
+    # 印花税率和固定成本
+    _STAMP_DUTY_RATE = 0.0005  # 卖出印花税 0.05%
+    _FIXED_COSTS = 1.0  # 过户费等固定成本（元）
+
+    @staticmethod
+    def calculate_arbitrage_profit(premium_rate: float, purchase_limit: float,
+                                   available_capital: float, purchase_fee_rate: float,
+                                   sell_commission_rate: float = 0.0003) -> float:
+        """计算LOF套利净利润
+
+        Args:
+            premium_rate: 当前溢价率(%)
+            purchase_limit: 申购累计限额(元)，0表示无限制
+            available_capital: 可用资金(元)
+            purchase_fee_rate: 申购费率(小数，如0.0015)
+            sell_commission_rate: 卖出佣金率(小数)，默认万三
+
+        Returns:
+            净利润(元)
+        """
+        # purchase_limit为0表示无限制，取available_capital
+        if purchase_limit <= 0:
+            purchasable_amount = available_capital
+        else:
+            purchasable_amount = min(purchase_limit, available_capital)
+
+        gross_profit = purchasable_amount * premium_rate / 100.0
+        purchase_fee = purchasable_amount * purchase_fee_rate
+        sell_commission = purchasable_amount * sell_commission_rate
+        stamp_duty = purchasable_amount * LofPremiumStrategy._STAMP_DUTY_RATE
+        fixed_costs = LofPremiumStrategy._FIXED_COSTS
+
+        return gross_profit - purchase_fee - sell_commission - stamp_duty - fixed_costs
+
     def execute(self) -> None:
         """执行LOF溢价策略
 
@@ -133,6 +167,19 @@ class LofPremiumStrategy(BaseStrategy):
             # 溢价率未达阈值，跳过信号判断
             if premium_rate < threshold:
                 continue
+
+            # 静默检查：查询lof_fund表
+            fund_info = self._storage.get_lof_fund(code)
+            if fund_info and fund_info.get("status") == "muted":
+                muted_until = fund_info.get("muted_until", "")
+                if muted_until and muted_until > now:
+                    logger.info("基金%s处于静默期(原因:%s，到期:%s)，跳过信号",
+                                code, fund_info.get("mute_reason", ""), muted_until)
+                    continue
+                else:
+                    # 静默已过期，自动恢复
+                    logger.info("基金%s静默已过期，自动恢复", code)
+                    self._storage.unmute_fund(code)
 
             # 信号防抖判断
             signal = self._signal_gen.check(code, premium_rate)
