@@ -119,6 +119,25 @@ class Storage:
         )
         self._conn.commit()
 
+    def upsert_holidays_batch(self, records: list) -> None:
+        """批量写入节假日记录，一次性提交
+
+        Args:
+            records: 列表，每项为 (date_str, is_trading_day, is_pre_holiday, holiday_name) 元组
+        """
+        if not records:
+            return
+        self._conn.executemany(
+            """INSERT INTO holiday_calendar (date, is_trading_day, is_pre_holiday, holiday_name)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(date) DO UPDATE SET
+                   is_trading_day=excluded.is_trading_day,
+                   is_pre_holiday=excluded.is_pre_holiday,
+                   holiday_name=excluded.holiday_name""",
+            records,
+        )
+        self._conn.commit()
+
     def is_pre_holiday(self, date_str: str) -> bool:
         """判断指定日期是否为节前交易日"""
         cursor = self._conn.execute(

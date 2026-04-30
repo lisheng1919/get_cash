@@ -263,30 +263,28 @@ class TradingCalendar:
                             break
                 pre_holiday_dates[td] = holiday_name
 
-        # 写入数据库：交易日
-        for td in trade_dates:
-            if td < min_date or td > max_date:
-                continue
-            is_pre = td in pre_holiday_dates
-            holiday_name = pre_holiday_dates.get(td, "")
-            storage.upsert_holiday(
-                td.strftime("%Y-%m-%d"),
-                is_trading_day=True,
-                is_pre_holiday=is_pre,
-                holiday_name=holiday_name,
-            )
+        # 批量写入数据库：交易日（不含节前标记，后续单独更新）
+        trade_records = [
+            (td.strftime("%Y-%m-%d"), True, False, "")
+            for td in sorted(trade_dates)
+            if min_date <= td <= max_date
+        ]
+        storage.upsert_holidays_batch(trade_records)
 
-        # 写入数据库：非交易日（节假日）
-        for ntd in non_trading_dates:
-            if ntd < min_date or ntd > max_date:
-                continue
-            holiday_name = self._infer_holiday_name(ntd.month)
-            storage.upsert_holiday(
-                ntd.strftime("%Y-%m-%d"),
-                is_trading_day=False,
-                is_pre_holiday=False,
-                holiday_name=holiday_name,
-            )
+        # 批量写入数据库：非交易日（节假日）
+        non_trading_records = [
+            (ntd.strftime("%Y-%m-%d"), False, False, self._infer_holiday_name(ntd.month))
+            for ntd in sorted(non_trading_dates)
+            if min_date <= ntd <= max_date
+        ]
+        storage.upsert_holidays_batch(non_trading_records)
+
+        # 批量更新节前交易日标记（覆盖已有交易日记录的is_pre_holiday字段）
+        pre_holiday_records = [
+            (d.strftime("%Y-%m-%d"), True, True, name)
+            for d, name in pre_holiday_dates.items()
+        ]
+        storage.upsert_holidays_batch(pre_holiday_records)
 
         # 重新加载到内存
         self.load_from_storage(storage)

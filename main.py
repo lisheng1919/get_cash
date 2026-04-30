@@ -157,7 +157,10 @@ def main():
     holiday_count = cursor.fetchone()[0]
     if holiday_count == 0:
         logger.info("交易日历为空，开始从akshare自动同步...")
-        calendar.sync_from_akshare(storage)
+        try:
+            calendar.sync_from_akshare(storage)
+        except Exception as e:
+            logger.warning("交易日历自动同步失败，系统将继续运行: %s", e)
 
     # 初始化通知管理器
     notifier = setup_notifier(config)
