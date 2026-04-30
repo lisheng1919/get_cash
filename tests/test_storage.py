@@ -196,3 +196,106 @@ def test_record_data_source_failure():
     assert result["consecutive_failures"] == 0
 
     conn.close()
+
+
+# ==================== 策略执行日志 ====================
+
+def test_insert_and_list_execution_log():
+    conn = _create_storage()
+    storage = Storage(conn)
+
+    storage.insert_execution_log("lof_premium", "success", 36000)
+    storage.insert_execution_log("bond_ipo", "fail", 2000, "timeout")
+
+    logs = storage.list_execution_logs()
+    assert len(logs) == 2
+    assert logs[0]["strategy_name"] == "bond_ipo"
+    assert logs[0]["status"] == "fail"
+    assert logs[0]["duration_ms"] == 2000
+    assert logs[0]["error_message"] == "timeout"
+
+    filtered = storage.list_execution_logs(strategy_name="lof_premium")
+    assert len(filtered) == 1
+    assert filtered[0]["strategy_name"] == "lof_premium"
+    assert filtered[0]["status"] == "success"
+    conn.close()
+
+
+# ==================== 告警事件 ====================
+
+def test_insert_and_list_alert_event():
+    conn = _create_storage()
+    storage = Storage(conn)
+
+    storage.insert_alert_event("ERROR", "collector", "lof_list失败")
+    storage.insert_alert_event("INFO", "heartbeat", "系统正常")
+
+    events = storage.list_alert_events()
+    assert len(events) == 2
+    assert events[0]["level"] == "INFO"
+    assert events[0]["source"] == "heartbeat"
+    assert events[1]["level"] == "ERROR"
+    conn.close()
+
+
+# ==================== 通知发送记录 ====================
+
+def test_insert_and_list_notification_log():
+    conn = _create_storage()
+    storage = Storage(conn)
+
+    storage.insert_notification_log("desktop", "lof_premium", "信号", "详情", "success")
+    storage.insert_notification_log("wechat", "bond_ipo", "打新", "详情", "fail")
+
+    logs = storage.list_notification_logs()
+    assert len(logs) == 2
+    assert logs[0]["channel"] == "wechat"
+    assert logs[0]["status"] == "fail"
+    conn.close()
+
+
+# ==================== 数据源状态扩展 ====================
+
+def test_record_data_source_failure_with_reason():
+    conn = _create_storage()
+    storage = Storage(conn)
+
+    count = storage.record_data_source_failure("lof_iopv", "timeout")
+    assert count == 1
+
+    status = storage.get_data_source_status("lof_iopv")
+    assert status["status"] == "failure"
+    assert status["consecutive_failures"] == 1
+    assert status["failure_reason"] == "timeout"
+    assert status["last_failure_time"] != ""
+    conn.close()
+
+
+def test_list_all_data_source_status():
+    conn = _create_storage()
+    storage = Storage(conn)
+
+    storage.update_data_source_status("lof_list", "ok")
+    storage.record_data_source_failure("bond_ipo", "timeout")
+
+    all_status = storage.list_all_data_source_status()
+    assert len(all_status) == 2
+    conn.close()
+
+
+# ==================== 系统状态KV ====================
+
+def test_upsert_and_get_system_status():
+    conn = _create_storage()
+    storage = Storage(conn)
+
+    storage.upsert_system_status("start_time", "2026-04-30 14:00:00")
+    assert storage.get_system_status("start_time") == "2026-04-30 14:00:00"
+
+    # 更新
+    storage.upsert_system_status("start_time", "2026-04-30 15:00:00")
+    assert storage.get_system_status("start_time") == "2026-04-30 15:00:00"
+
+    # 不存在的key
+    assert storage.get_system_status("nonexistent") is None
+    conn.close()

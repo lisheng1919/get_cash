@@ -193,8 +193,14 @@ class Storage:
             return None
         return dict(row)
 
-    def record_data_source_failure(self, name: str) -> int:
-        """记录数据源失败，连续失败次数+1，返回当前失败次数"""
+    def record_data_source_failure(self, name: str, reason: str = "") -> int:
+        """记录数据源失败，连续失败次数+1，返回当前失败次数
+
+        Args:
+            name: 数据源名称
+            reason: 失败原因，截断至200字符
+        """
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # 先查询当前状态
         cursor = self._conn.execute(
             "SELECT consecutive_failures FROM data_source_status WHERE name = ?",
@@ -204,9 +210,9 @@ class Storage:
         if row is None:
             # 不存在则插入初始记录
             self._conn.execute(
-                """INSERT INTO data_source_status (name, status, last_success_time, consecutive_failures)
-                   VALUES (?, 'failure', '', 1)""",
-                (name,),
+                """INSERT INTO data_source_status (name, status, last_success_time, consecutive_failures, last_failure_time, failure_reason)
+                   VALUES (?, 'failure', '', 1, ?, ?)""",
+                (name, now, reason[:200]),
             )
             self._conn.commit()
             return 1
@@ -214,12 +220,19 @@ class Storage:
         new_count = row["consecutive_failures"] + 1
         self._conn.execute(
             """UPDATE data_source_status
-               SET status='failure', consecutive_failures=?
+               SET status='failure', consecutive_failures=?, last_failure_time=?, failure_reason=?
                WHERE name=?""",
-            (new_count, name),
+            (new_count, now, reason[:200], name),
         )
         self._conn.commit()
         return new_count
+
+    def list_all_data_source_status(self) -> List[Dict]:
+        """列出所有数据源状态"""
+        cursor = self._conn.execute(
+            "SELECT * FROM data_source_status ORDER BY name"
+        )
+        return [dict(row) for row in cursor.fetchall()]
 
     # ==================== 债券IPO ====================
 
@@ -312,3 +325,99 @@ class Storage:
         )
         self._conn.commit()
         return cursor.lastrowid
+
+    # ==================== 策略执行日志 ====================
+
+    def insert_execution_log(self, strategy_name: str, status: str,
+                             duration_ms: int, error_message: str = "") -> int:
+        """插入策略执行日志，返回自增ID"""
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor = self._conn.execute(
+            """INSERT INTO strategy_execution_log (strategy_name, trigger_time, status, duration_ms, error_message, record_time)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (strategy_name, now, status, duration_ms, error_message[:500], now),
+        )
+        self._conn.commit()
+        return cursor.lastrowid
+
+    def list_execution_logs(self, strategy_name: str = "", limit: int = 20) -> List[Dict]:
+        """查询策略执行日志"""
+        if strategy_name:
+            cursor = self._conn.execute(
+                """SELECT * FROM strategy_execution_log
+                   WHERE strategy_name = ?
+                   ORDER BY trigger_time DESC LIMIT ?""",
+                (strategy_name, limit),
+            )
+        else:
+            cursor = self._conn.execute(
+                """SELECT * FROM strategy_execution_log
+                   ORDER BY trigger_time DESC LIMIT ?""",
+                (limit,),
+            )
+        return [dict(row) for row in cursor.fetchall()]
+
+    # ==================== 告警事件 ====================
+
+    def insert_alert_event(self, level: str, source: str, message: str) -> int:
+        """插入告警事件，返回自增ID"""
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor = self._conn.execute(
+            """INSERT INTO alert_event (level, source, message, timestamp)
+               VALUES (?, ?, ?, ?)""",
+            (level, source, message[:500], now),
+        )
+        self._conn.commit()
+        return cursor.lastrowid
+
+    def list_alert_events(self, limit: int = 20) -> List[Dict]:
+        """查询告警事件，按时间倒序"""
+        cursor = self._conn.execute(
+            """SELECT * FROM alert_event
+               ORDER BY timestamp DESC LIMIT ?""",
+            (limit,),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+    # ==================== 通知发送记录 ====================
+
+    def insert_notification_log(self, channel: str, event_type: str,
+                                title: str, message: str, status: str) -> int:
+        """插入通知发送记录，返回自增ID"""
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor = self._conn.execute(
+            """INSERT INTO notification_log (channel, event_type, title, message, status, timestamp)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (channel, event_type, title[:200], message[:500], status, now),
+        )
+        self._conn.commit()
+        return cursor.lastrowid
+
+    def list_notification_logs(self, limit: int = 20) -> List[Dict]:
+        """查询通知发送记录，按时间倒序"""
+        cursor = self._conn.execute(
+            """SELECT * FROM notification_log
+               ORDER BY timestamp DESC LIMIT ?""",
+            (limit,),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+    # ==================== 系统状态KV ====================
+
+    def upsert_system_status(self, key: str, value: str) -> None:
+        """插入或更新系统状态键值对"""
+        self._conn.execute(
+            """INSERT INTO system_status (key, value)
+               VALUES (?, ?)
+               ON CONFLICT(key) DO UPDATE SET value=excluded.value""",
+            (key, value[:500]),
+        )
+        self._conn.commit()
+
+    def get_system_status(self, key: str) -> Optional[str]:
+        """获取系统状态值"""
+        cursor = self._conn.execute(
+            "SELECT value FROM system_status WHERE key = ?", (key,)
+        )
+        row = cursor.fetchone()
+        return row["value"] if row else None
