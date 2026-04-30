@@ -10,3 +10,5 @@
 *.iml
 __pycache__/
 *.pyc
+.superpowers/
+db/
