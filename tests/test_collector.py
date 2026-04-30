@@ -141,13 +141,15 @@ def test_fetch_lof_iopv_returns_iopv_data():
 
     collector = _create_collector()
 
-    fake_df = pd.DataFrame({
+    # 批量估值接口返回空，触发回退到逐只查询
+    fake_hist_df = pd.DataFrame({
         "收盘": [1.025, 1.030],
         "成交量": [5000, 6000],
     })
 
-    with patch("akshare.fund_etf_hist_em", return_value=fake_df):
-        result = collector.fetch_lof_iopv(["164906"])
+    with patch("akshare.fund_value_estimation_em", return_value=pd.DataFrame(), create=True):
+        with patch("akshare.fund_etf_hist_em", return_value=fake_hist_df):
+            result = collector.fetch_lof_iopv(["164906"])
 
     assert "164906" in result
     assert result["164906"]["iopv"] == 1.030
@@ -164,11 +166,13 @@ def test_fetch_lof_iopv_empty_codes():
 def test_fetch_lof_iopv_failure_returns_zero():
     """获取失败时应返回iopv为0"""
     from unittest.mock import patch
+    import pandas as pd
 
     collector = _create_collector()
 
-    with patch("akshare.fund_etf_hist_em", side_effect=Exception("网络错误")):
-        result = collector.fetch_lof_iopv(["164906"])
+    with patch("akshare.fund_value_estimation_em", return_value=pd.DataFrame(), create=True):
+        with patch("akshare.fund_etf_hist_em", side_effect=Exception("网络错误")):
+            result = collector.fetch_lof_iopv(["164906"])
 
     assert "164906" in result
     assert result["164906"]["iopv"] == 0.0
