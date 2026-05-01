@@ -83,12 +83,14 @@ class ReverseRepoStrategy(BaseStrategy):
         """执行逆回购策略
 
         流程：
-        1. 判断今天是否为节前交易日，不是则跳过
-        2. 计算可投入逆回购的资金
-        3. 选择合适的逆回购品种
-        4. 获取节假日名称
-        5. 构建通知消息并推送
+        1. 刷新_today为当天日期（避免长期运行后跨天）
+        2. 判断今天是否为节前交易日，不是则跳过
+        3. 计算可投入逆回购的资金
+        4. 选择合适的逆回购品种
+        5. 获取节假日名称
+        6. 构建通知消息并推送
         """
+        self._today = date.today()
         if not self.should_trigger():
             logger.info("今日(%s)非节前交易日，跳过逆回购策略", self._today)
             return

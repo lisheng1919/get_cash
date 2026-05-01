@@ -13,7 +13,7 @@ class LofFilter:
         Args:
             min_volume: 最低日成交量（万元），低于此值的基金被过滤
         """
-        self.min_volume = min_volume
+        self._min_volume = min_volume
 
     def filter_by_volume(self, daily_volume):
         """按成交量过滤
@@ -24,7 +24,7 @@ class LofFilter:
         Returns:
             True表示通过过滤，False表示被过滤掉
         """
-        return daily_volume >= self.min_volume
+        return daily_volume >= self._min_volume
 
     def filter_by_suspension(self, is_suspended):
         """按停牌状态过滤

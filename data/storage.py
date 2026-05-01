@@ -1,8 +1,14 @@
 """数据存储层，提供对SQLite数据库的CRUD操作"""
 
+import re
 import sqlite3
 from datetime import datetime, date
 from typing import List, Dict, Optional
+
+
+def _is_valid_identifier(name: str) -> bool:
+    """校验是否为合法SQL标识符（仅含字母数字下划线，不以数字开头）"""
+    return bool(re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', name))
 
 
 class Storage:
@@ -506,6 +512,18 @@ class Storage:
                         search_columns=None, order_by="id", order_dir="DESC",
                         extra_where=None, extra_params=None):
         """通用分页查询"""
+        # 白名单校验，防止SQL注入
+        if not _is_valid_identifier(table):
+            raise ValueError(f"Invalid table name: {table}")
+        if not _is_valid_identifier(order_by):
+            raise ValueError(f"Invalid order_by: {order_by}")
+        if order_dir.upper() not in ("ASC", "DESC"):
+            raise ValueError(f"Invalid order_dir: {order_dir}, only ASC/DESC allowed")
+        if search_columns:
+            for col in search_columns:
+                if not _is_valid_identifier(col):
+                    raise ValueError(f"Invalid column name: {col}")
+
         where_clauses = []
         params = []
 

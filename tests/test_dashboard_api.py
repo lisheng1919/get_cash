@@ -356,3 +356,21 @@ def test_api_data_daily_summary(app_client):
     data = resp.get_json()
     assert "items" in data
     assert "total" in data
+
+
+# ==================== days参数校验 ====================
+
+def test_api_mute_days_validation(app_client):
+    """验证days参数必须在1-365范围内"""
+    # days=0
+    resp = app_client.post("/api/mute", json={"fund_code": "164906", "days": 0})
+    assert resp.status_code == 400
+    # days=366
+    resp = app_client.post("/api/mute", json={"fund_code": "164906", "days": 366})
+    assert resp.status_code == 400
+    # days=-1
+    resp = app_client.post("/api/mute", json={"fund_code": "164906", "days": -1})
+    assert resp.status_code == 400
+    # days=7 合法
+    resp = app_client.post("/api/mute", json={"fund_code": "164906", "days": 7})
+    assert resp.status_code == 200

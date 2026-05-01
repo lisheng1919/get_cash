@@ -461,25 +461,27 @@ class ConfigManager:
     def init_from_yaml(self) -> None:
         """从config.yaml初始化配置到DB
 
-        仅当DB中config_kv表为空时执行写入，避免覆盖用户修改。
+        仅当DB中config_kv表对应分类为空时执行写入，避免覆盖用户修改。
+        逐分类检查：只跳过已有数据的分类，其他分类正常初始化。
         """
-        # 检查DB是否已有配置：任一分类有数据则跳过
+        # 收集已有数据的分类
+        populated_categories = set()
         for category in CONFIG_META:
             existing = self._storage.get_config_by_category(category)
             if existing:
-                logger.info("DB已有配置(category=%s, %d条)，跳过初始化", category, len(existing))
-                return
+                populated_categories.add(category)
+                logger.info("DB已有配置(category=%s, %d条)，跳过该分类", category, len(existing))
 
-        # DB为空，遍历CONFIG_META写入
+        # 遍历CONFIG_META写入，跳过已有数据的分类
         count = 0
         for category, sections in CONFIG_META.items():
+            if category in populated_categories:
+                continue
             for section, keys in sections.items():
                 for key, meta in keys.items():
-                    # 从config_dict提取值
                     value = self._get_yaml_value(
                         category, section, key, meta["default"]
                     )
-                    # 转为字符串存储
                     value_str = _value_to_str(value, meta["value_type"])
                     self._storage.upsert_config_kv(
                         category=category,
@@ -492,7 +494,10 @@ class ConfigManager:
                     )
                     count += 1
 
-        logger.info("从config.yaml初始化配置完成，共写入%d条", count)
+        if count > 0:
+            logger.info("从config.yaml初始化配置完成，共写入%d条", count)
+        else:
+            logger.info("所有分类已有配置，跳过初始化")
 
     def _get_yaml_value(self, category: str, section: str, key: str, default: Any) -> Any:
         """从config_dict中提取配置值

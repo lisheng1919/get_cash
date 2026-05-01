@@ -54,6 +54,7 @@ def create_app(storage=None, config_manager=None):
         # per-request连接管理：同一请求内复用
         if "storage" not in g:
             conn = sqlite3.connect(DB_PATH)
+            conn.execute("PRAGMA journal_mode=WAL")
             conn.row_factory = sqlite3.Row
             init_db(conn)
             g.storage = Storage(conn)
@@ -105,14 +106,15 @@ def create_app(storage=None, config_manager=None):
         ).fetchall()
         data_sources = [dict(r) for r in data_sources]
 
-        # 通知渠道今日统计
-        today_str = datetime.now().strftime("%Y-%m-%d")
+        # 通知渠道今日统计（使用范围查询替代LIKE）
+        today_start = datetime.now().strftime("%Y-%m-%d 00:00:00")
+        tomorrow_start = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d 00:00:00")
         stats_row = storage._conn.execute(
             "SELECT COUNT(*) as total, "
             "SUM(CASE WHEN status='success' THEN 1 ELSE 0 END) as success_cnt, "
             "SUM(CASE WHEN status='fail' THEN 1 ELSE 0 END) as fail_cnt "
-            "FROM notification_log WHERE timestamp LIKE ?",
-            (today_str + "%",),
+            "FROM notification_log WHERE timestamp >= ? AND timestamp < ?",
+            (today_start, tomorrow_start),
         ).fetchone()
         today_stats = {
             "total": stats_row["total"] or 0,
@@ -132,8 +134,8 @@ def create_app(storage=None, config_manager=None):
         for se in strategy_execution:
             cnt_row = storage._conn.execute(
                 "SELECT COUNT(*) as cnt FROM strategy_execution_log "
-                "WHERE strategy_name=? AND trigger_time LIKE ?",
-                (se["strategy_name"], today_str + "%"),
+                "WHERE strategy_name=? AND trigger_time >= ? AND trigger_time < ?",
+                (se["strategy_name"], today_start, tomorrow_start),
             ).fetchone()
             se["today_count"] = cnt_row["cnt"]
 
@@ -147,17 +149,21 @@ def create_app(storage=None, config_manager=None):
         # 告警事件（分页）
         alert_page = request.args.get("alert_page", 1, type=int)
         alert_page_size = request.args.get("alert_page_size", 10, type=int)
+        alert_search = request.args.get("alert_search")
         alert_events = storage.query_paginated(
             "alert_event", page=alert_page, page_size=alert_page_size,
             order_by="timestamp", order_dir="DESC",
+            search=alert_search, search_columns=["level", "source", "message"] if alert_search else None,
         )
 
         # 通知记录（分页）
         notif_page = request.args.get("notif_page", 1, type=int)
         notif_page_size = request.args.get("notif_page_size", 10, type=int)
+        notif_search = request.args.get("notif_search")
         notification_logs = storage.query_paginated(
             "notification_log", page=notif_page, page_size=notif_page_size,
             order_by="timestamp", order_dir="DESC",
+            search=notif_search, search_columns=["channel", "status", "event_type"] if notif_search else None,
         )
 
         return jsonify({
@@ -191,7 +197,7 @@ def create_app(storage=None, config_manager=None):
         return jsonify(storage.query_paginated(
             "premium_history",
             page=page, page_size=page_size,
-            search=search, search_columns=["fund_code"],
+            search=search, search_columns=["fund_code", "iopv_source"],
             order_by=sort_by, order_dir=sort_order,
         ))
 
@@ -207,7 +213,7 @@ def create_app(storage=None, config_manager=None):
         return jsonify(storage.query_paginated(
             "trade_signal",
             page=page, page_size=page_size,
-            search=search, search_columns=["fund_code", "action"],
+            search=search, search_columns=["fund_code", "action", "status"],
             order_by=sort_by, order_dir=sort_order,
         ))
 
@@ -255,7 +261,7 @@ def create_app(storage=None, config_manager=None):
         return jsonify(storage.query_paginated(
             "reverse_repo",
             page=page, page_size=page_size,
-            search=search, search_columns=["date"],
+            search=search, search_columns=["date", "code"],
             order_by=sort_by, order_dir=sort_order,
         ))
 
@@ -277,6 +283,20 @@ def create_app(storage=None, config_manager=None):
 
     # ==================== 静默API ====================
 
+    @app.route("/api/cleanup_expired_mutes", methods=["POST"])
+    def api_cleanup_expired_mutes():
+        """清理已过期的静默基金，恢复为normal状态"""
+        storage = _get_storage()
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor = storage._conn.execute(
+            "SELECT code FROM lof_fund WHERE status='muted' AND muted_until < ? AND muted_until != ''",
+            (now_str,),
+        )
+        expired_codes = [row["code"] for row in cursor.fetchall()]
+        for code in expired_codes:
+            storage.unmute_fund(code)
+        return jsonify({"ok": True, "restored": len(expired_codes)})
+
     @app.route("/api/mute", methods=["POST"])
     def api_mute():
         """手动静默基金"""
@@ -286,6 +306,14 @@ def create_app(storage=None, config_manager=None):
 
         if not fund_code:
             return jsonify({"ok": False, "error": "fund_code必填"}), 400
+
+        # days参数校验
+        try:
+            days = int(days)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "days必须为整数"}), 400
+        if days < 1 or days > 365:
+            return jsonify({"ok": False, "error": "days必须在1-365范围内"}), 400
 
         storage = _get_storage()
         fund = storage.get_lof_fund(fund_code)
@@ -311,8 +339,17 @@ def create_app(storage=None, config_manager=None):
 
     @app.route("/api/muted_funds")
     def api_muted_funds():
-        """获取静默基金列表 - 分页查询"""
+        """获取静默基金列表 - 分页查询（自动清理过期静默）"""
         storage = _get_storage()
+        # 自动清理已过期的静默基金
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        expired = storage._conn.execute(
+            "SELECT code FROM lof_fund WHERE status='muted' AND muted_until < ? AND muted_until != ''",
+            (now_str,),
+        ).fetchall()
+        for row in expired:
+            storage.unmute_fund(row["code"])
+
         page = request.args.get("page", 1, type=int)
         page_size = request.args.get("page_size", 10, type=int)
         search = request.args.get("search")
@@ -325,6 +362,9 @@ def create_app(storage=None, config_manager=None):
         ))
 
     # ==================== 配置API ====================
+
+    # 敏感配置键列表
+    SENSITIVE_KEYS = {"serverchan_key", "webhook"}
 
     @app.route("/api/config", methods=["GET"])
     def api_config_get():
@@ -339,6 +379,14 @@ def create_app(storage=None, config_manager=None):
 
         category = request.args.get("category")
         items = cm.get_config(category)
+        # 敏感字段脱敏：仅显示后4位
+        for item in items:
+            if item["key"] in SENSITIVE_KEYS and item["value"]:
+                val = item["value"]
+                if len(val) > 4:
+                    item["value"] = "****" + val[-4:]
+                else:
+                    item["value"] = "****"
         return jsonify({"ok": True, "items": items})
 
     @app.route("/api/config", methods=["PUT"])
@@ -356,8 +404,16 @@ def create_app(storage=None, config_manager=None):
         if not items:
             return jsonify({"ok": False, "error": "items不能为空"}), 400
 
-        cm.update_config(items)
-        return jsonify({"ok": True, "updated": len(items)})
+        # 过滤掉脱敏格式的值（****开头的），不覆盖原值
+        real_items = []
+        for item in items:
+            if item["key"] in SENSITIVE_KEYS and isinstance(item.get("value"), str) and item["value"].startswith("****"):
+                continue
+            real_items.append(item)
+
+        if real_items:
+            cm.update_config(real_items)
+        return jsonify({"ok": True, "updated": len(real_items)})
 
     @app.route("/api/config/reload", methods=["POST"])
     def api_config_reload():
@@ -382,6 +438,7 @@ def close_db(exception):
 if __name__ == "__main__":
     # 独立运行时自动创建Storage和ConfigManager
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.row_factory = sqlite3.Row
     init_db(conn)
     storage = Storage(conn)

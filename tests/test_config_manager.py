@@ -394,6 +394,30 @@ class TestConfigManager(unittest.TestCase):
         finally:
             conn.close()
 
+    def test_init_from_yaml_per_category_skip(self):
+        """验证init_from_yaml逐分类检查，只跳过已有数据的分类"""
+        conn, storage, manager, _ = _create_env()
+        try:
+            # 只手动写入strategy分类的配置
+            storage.upsert_config_kv("strategy", "bond_ipo", "enabled", "1", "bool", "启用策略", "")
+
+            # 执行初始化
+            manager.init_from_yaml()
+
+            # strategy分类应跳过（已有数据），不会覆盖
+            bond_ipo_enabled = storage.get_config_kv("strategy", "bond_ipo", "enabled")
+            self.assertEqual(bond_ipo_enabled["value"], "1")
+
+            # notify/risk/system分类应正常写入
+            notify_items = storage.get_config_by_category("notify")
+            self.assertGreater(len(notify_items), 0)
+            risk_items = storage.get_config_by_category("risk")
+            self.assertGreater(len(risk_items), 0)
+            system_items = storage.get_config_by_category("system")
+            self.assertGreater(len(system_items), 0)
+        finally:
+            conn.close()
+
 
 class TestValueConversion(unittest.TestCase):
     """值转换辅助函数测试"""

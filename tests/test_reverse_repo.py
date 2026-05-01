@@ -66,6 +66,8 @@ def test_reverse_repo_select_code_sz():
 
 def test_reverse_repo_execute_on_pre_holiday():
     """节前交易日执行策略应推送通知"""
+    from unittest.mock import patch
+
     calendar = TradingCalendar()
     calendar.add_pre_holiday(date(2026, 9, 30), "国庆节前")
     # amount=150000，保留20%后可投120000>=10万，选择沪市品种
@@ -77,9 +79,11 @@ def test_reverse_repo_execute_on_pre_holiday():
         "prefer_sh": True,
     }
     strategy = _create_strategy(config=config, calendar=calendar)
-    strategy._today = date(2026, 9, 30)
 
-    strategy.execute()
+    with patch('strategies.reverse_repo.date') as mock_date:
+        mock_date.today.return_value = date(2026, 9, 30)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        strategy.execute()
 
     # 验证通知被调用
     strategy._notifier.notify.assert_called_once()
@@ -93,10 +97,14 @@ def test_reverse_repo_execute_on_pre_holiday():
 
 def test_reverse_repo_execute_on_normal_day():
     """普通交易日执行策略不应推送通知"""
-    strategy = _create_strategy()
-    strategy._today = date(2026, 4, 29)  # 普通日
+    from unittest.mock import patch
 
-    strategy.execute()
+    strategy = _create_strategy()
+
+    with patch('strategies.reverse_repo.date') as mock_date:
+        mock_date.today.return_value = date(2026, 4, 29)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        strategy.execute()
 
     strategy._notifier.notify.assert_not_called()
 
@@ -111,3 +119,22 @@ def test_reverse_repo_select_code_sz_when_not_prefer_sh():
     }
     strategy = _create_strategy(config=config)
     assert strategy.select_code(100000) == "131810"
+
+
+def test_reverse_repo_today_updates_on_execute():
+    """验证execute方法中_today会重新获取当天日期，不依赖构造时的固定值"""
+    from unittest.mock import patch
+
+    calendar = TradingCalendar()
+    calendar.add_pre_holiday(date(2026, 9, 30), "国庆节前")
+    strategy = _create_strategy(calendar=calendar)
+    # 构造时设置一个旧日期
+    strategy._today = date(2026, 1, 1)
+    # execute时应重新获取date.today()
+    strategy.execute()
+    # 非节前日，不应通知。关键验证：_today被更新了
+    with patch('strategies.reverse_repo.date') as mock_date:
+        mock_date.today.return_value = date(2026, 9, 30)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        strategy.execute()
+        strategy._notifier.notify.assert_called_once()

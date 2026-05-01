@@ -1,6 +1,7 @@
 """测试Storage的配置CRUD和分页查询方法"""
 
 import sqlite3
+import pytest
 from data.models import init_db
 from data.storage import Storage
 
@@ -116,4 +117,49 @@ def test_mark_signal_processed():
     storage.mark_reload_signal_processed(signals[0]["id"])
     signals2 = storage.get_unprocessed_reload_signals()
     assert len(signals2) == 0
+    conn.close()
+
+
+# ==================== 白名单校验 ====================
+
+def test_query_paginated_rejects_invalid_order_dir():
+    """order_dir仅允许ASC/DESC，其他值应抛出ValueError"""
+    conn, storage = _create_storage()
+    with pytest.raises(ValueError, match="order_dir"):
+        storage.query_paginated("premium_history", order_dir="INVALID")
+    conn.close()
+
+
+def test_query_paginated_rejects_invalid_table_name():
+    """table名仅允许合法SQL标识符"""
+    conn, storage = _create_storage()
+    with pytest.raises(ValueError, match="table"):
+        storage.query_paginated("premium_history; DROP TABLE--")
+    conn.close()
+
+
+def test_query_paginated_rejects_invalid_column_name():
+    """search_columns仅允许合法SQL标识符"""
+    conn, storage = _create_storage()
+    with pytest.raises(ValueError, match="column"):
+        storage.query_paginated("premium_history", search="test",
+                                search_columns=["fund_code; DROP TABLE--"])
+    conn.close()
+
+
+def test_query_paginated_rejects_invalid_order_by():
+    """order_by仅允许合法SQL标识符"""
+    conn, storage = _create_storage()
+    with pytest.raises(ValueError, match="order_by"):
+        storage.query_paginated("premium_history", order_by="id; DROP TABLE--")
+    conn.close()
+
+
+def test_query_paginated_accepts_valid_params():
+    """合法参数应正常工作"""
+    conn, storage = _create_storage()
+    storage.insert_premium_history("2026-05-01 09:00:00", "164906", 1.0, 1.0, 0.0, "realtime")
+    result = storage.query_paginated("premium_history", order_by="timestamp", order_dir="ASC",
+                                      search="164906", search_columns=["fund_code"])
+    assert result["total"] == 1
     conn.close()

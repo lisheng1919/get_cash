@@ -39,6 +39,7 @@ def setup_database(db_path: str) -> sqlite3.Connection:
         已初始化的数据库连接
     """
     conn = sqlite3.connect(db_path, check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL")
     init_db(conn)
     return conn
 
@@ -364,6 +365,20 @@ def main():
 
     # 添加配置轮询任务（每30秒检查重载信号）
     scheduler.add_config_poll_job(config_manager, interval=30)
+
+    # 静默过期基金自动清理（每小时检查一次）
+    def cleanup_expired_mutes():
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        expired = conn.execute(
+            "SELECT code FROM lof_fund WHERE status='muted' AND muted_until < ? AND muted_until != ''",
+            (now_str,),
+        ).fetchall()
+        for row in expired:
+            storage.unmute_fund(row["code"])
+        if expired:
+            logger.info("自动清理%d只过期静默基金", len(expired))
+
+    scheduler._scheduler.add_job(cleanup_expired_mutes, 'interval', hours=1, id='cleanup_expired_mutes')
 
     # 启动Flask看板线程
     flask_app = create_app(storage=storage, config_manager=config_manager)
