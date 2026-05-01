@@ -502,7 +502,7 @@ class Storage:
 
     # ==================== 分页查询 ====================
 
-    def query_paginated(self, table, page=1, page_size=20, search=None,
+    def query_paginated(self, table, page=1, page_size=10, search=None,
                         search_columns=None, order_by="id", order_dir="DESC",
                         extra_where=None, extra_params=None):
         """通用分页查询"""

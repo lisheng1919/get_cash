@@ -146,7 +146,7 @@ def create_app(storage=None, config_manager=None):
 
         # 告警事件（分页）
         alert_page = request.args.get("alert_page", 1, type=int)
-        alert_page_size = request.args.get("alert_page_size", 20, type=int)
+        alert_page_size = request.args.get("alert_page_size", 10, type=int)
         alert_events = storage.query_paginated(
             "alert_event", page=alert_page, page_size=alert_page_size,
             order_by="timestamp", order_dir="DESC",
@@ -154,7 +154,7 @@ def create_app(storage=None, config_manager=None):
 
         # 通知记录（分页）
         notif_page = request.args.get("notif_page", 1, type=int)
-        notif_page_size = request.args.get("notif_page_size", 20, type=int)
+        notif_page_size = request.args.get("notif_page_size", 10, type=int)
         notification_logs = storage.query_paginated(
             "notification_log", page=notif_page, page_size=notif_page_size,
             order_by="timestamp", order_dir="DESC",
@@ -184,7 +184,7 @@ def create_app(storage=None, config_manager=None):
         """LOF溢价率监控 - 分页查询"""
         storage = _get_storage()
         page = request.args.get("page", 1, type=int)
-        page_size = request.args.get("page_size", 20, type=int)
+        page_size = request.args.get("page_size", 10, type=int)
         search = request.args.get("search")
         sort_by = request.args.get("sort_by", "timestamp")
         sort_order = request.args.get("sort_order", "DESC")
@@ -200,7 +200,7 @@ def create_app(storage=None, config_manager=None):
         """LOF套利信号 - 分页查询"""
         storage = _get_storage()
         page = request.args.get("page", 1, type=int)
-        page_size = request.args.get("page_size", 20, type=int)
+        page_size = request.args.get("page_size", 10, type=int)
         search = request.args.get("search")
         sort_by = request.args.get("sort_by", "trigger_time")
         sort_order = request.args.get("sort_order", "DESC")
@@ -216,7 +216,7 @@ def create_app(storage=None, config_manager=None):
         """可转债打新 - 分页查询"""
         storage = _get_storage()
         page = request.args.get("page", 1, type=int)
-        page_size = request.args.get("page_size", 20, type=int)
+        page_size = request.args.get("page_size", 10, type=int)
         search = request.args.get("search")
         sort_by = request.args.get("sort_by", "subscribe_date")
         sort_order = request.args.get("sort_order", "DESC")
@@ -232,7 +232,7 @@ def create_app(storage=None, config_manager=None):
         """可转债配债 - 分页查询"""
         storage = _get_storage()
         page = request.args.get("page", 1, type=int)
-        page_size = request.args.get("page_size", 20, type=int)
+        page_size = request.args.get("page_size", 10, type=int)
         search = request.args.get("search")
         sort_by = request.args.get("sort_by", "record_date")
         sort_order = request.args.get("sort_order", "DESC")
@@ -248,7 +248,7 @@ def create_app(storage=None, config_manager=None):
         """逆回购记录 - 分页查询"""
         storage = _get_storage()
         page = request.args.get("page", 1, type=int)
-        page_size = request.args.get("page_size", 20, type=int)
+        page_size = request.args.get("page_size", 10, type=int)
         search = request.args.get("search")
         sort_by = request.args.get("sort_by", "date")
         sort_order = request.args.get("sort_order", "DESC")
@@ -264,7 +264,7 @@ def create_app(storage=None, config_manager=None):
         """每日汇总 - 分页查询"""
         storage = _get_storage()
         page = request.args.get("page", 1, type=int)
-        page_size = request.args.get("page_size", 20, type=int)
+        page_size = request.args.get("page_size", 10, type=int)
         search = request.args.get("search")
         sort_by = request.args.get("sort_by", "date")
         sort_order = request.args.get("sort_order", "DESC")
@@ -314,7 +314,7 @@ def create_app(storage=None, config_manager=None):
         """获取静默基金列表 - 分页查询"""
         storage = _get_storage()
         page = request.args.get("page", 1, type=int)
-        page_size = request.args.get("page_size", 20, type=int)
+        page_size = request.args.get("page_size", 10, type=int)
         search = request.args.get("search")
         return jsonify(storage.query_paginated(
             "lof_fund",

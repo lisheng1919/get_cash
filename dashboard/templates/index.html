@@ -110,7 +110,7 @@
 {% raw %}
     <h1>个人量化套利中枢</h1>
 
-    <div v-scope="App()" @mounted="init">
+    <div v-scope="App()" @vue:mounted="init">
         <!-- 标签页导航 -->
         <div class="tabs">
             <div class="tab" :class="{ active: activeTab === 'status' }" @click="switchTab('status')">状态总览</div>
@@ -119,7 +119,7 @@
         </div>
 
         <!-- ==================== 状态总览 ==================== -->
-        <div v-show="activeTab === 'status'" v-scope="StatusTab()" @mounted="statusInit">
+        <div v-show="activeTab === 'status'" v-scope="StatusTab()" @vue:mounted="statusInit">
             <div class="refresh-info">上次刷新: {{ refreshTime }}</div>
 
             <!-- 第一行：3个状态卡片 -->
@@ -292,7 +292,7 @@
                     ],
                     searchPlaceholder: '搜索基金代码...',
                     defaultSortBy: 'timestamp'
-                })" @mounted="dtInit"></div>
+                })" @vue:mounted="dtInit"></div>
             </div>
 
             <!-- 交易信号 -->
@@ -310,7 +310,7 @@
                     ],
                     searchPlaceholder: '搜索基金代码/动作...',
                     defaultSortBy: 'trigger_time'
-                })" @mounted="dtInit"></div>
+                })" @vue:mounted="dtInit"></div>
             </div>
 
             <!-- 可转债打新 -->
@@ -328,7 +328,7 @@
                     ],
                     searchPlaceholder: '搜索代码/名称...',
                     defaultSortBy: 'subscribe_date'
-                })" @mounted="dtInit"></div>
+                })" @vue:mounted="dtInit"></div>
             </div>
 
             <!-- 配债监控 -->
@@ -346,7 +346,7 @@
                     ],
                     searchPlaceholder: '搜索代码/名称...',
                     defaultSortBy: 'record_date'
-                })" @mounted="dtInit"></div>
+                })" @vue:mounted="dtInit"></div>
             </div>
 
             <!-- 逆回购 -->
@@ -364,7 +364,7 @@
                     ],
                     searchPlaceholder: '搜索日期...',
                     defaultSortBy: 'date'
-                })" @mounted="dtInit"></div>
+                })" @vue:mounted="dtInit"></div>
             </div>
 
             <!-- 日汇总 -->
@@ -380,17 +380,18 @@
                     ],
                     searchPlaceholder: '搜索日期/策略...',
                     defaultSortBy: 'date'
-                })" @mounted="dtInit"></div>
+                })" @vue:mounted="dtInit"></div>
             </div>
         </div>
 
         <!-- ==================== 配置管理 ==================== -->
-        <div v-show="activeTab === 'config'" v-scope="ConfigTab()" @mounted="configInit">
+        <div v-show="activeTab === 'config'" v-scope="ConfigTab()" @vue:mounted="configInit">
             <div class="config-reload-bar">
                 <button @click="reloadConfig">手动重载配置</button>
             </div>
 
             <div v-if="!configLoaded" class="dt-loading">加载中...</div>
+            <div v-if="configLoaded && configError" class="section" style="color:#f5222d;text-align:center;padding:40px">{{ configError }}（需通过 main.py 启动系统后使用）</div>
 
             <div v-for="cat in orderedCategories" class="config-category section">
                 <h2 @click="toggleCategory(cat)">
@@ -449,7 +450,6 @@
                         <option value="10">10</option>
                         <option value="20">20</option>
                         <option value="50">50</option>
-                        <option value="100">100</option>
                     </select>
                     条
                 </div>
@@ -540,7 +540,7 @@
             items: [],
             total: 0,
             page: 1,
-            pageSize: 20,
+            pageSize: 10,
             totalPages: 0,
             search: '',
             loading: false,
@@ -657,7 +657,7 @@
             mutedItems: [],
             mutedTotal: 0,
             mutedPage: 1,
-            mutedPageSize: 20,
+            mutedPageSize: 10,
             mutedTotalPages: 0,
             mutedSearch: '',
             mutedLoading: false,
@@ -681,9 +681,9 @@
                 var self = this;
                 var params = new URLSearchParams({
                     alert_page: self.alertPage,
-                    alert_page_size: 20,
+                    alert_page_size: 10,
                     notif_page: self.notifPage,
-                    notif_page_size: 20
+                    notif_page_size: 10
                 });
                 fetch('/api/status?' + params.toString())
                     .then(function(r) { return r.json(); })
@@ -868,6 +868,7 @@
             collapsedSections: {},
             saveMsg: {},
             configLoaded: false,
+            configError: '',
 
             // 分类名映射
             categoryNames: {
@@ -891,10 +892,18 @@
                 fetch('/api/config')
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
-                        if (!data.ok) return;
+                        if (!data.ok) {
+                            self.configLoaded = true;
+                            self.configError = data.error || '加载失败';
+                            return;
+                        }
                         self.allItems = data.items || [];
                         self.groupItems();
                         self.configLoaded = true;
+                    })
+                    .catch(function() {
+                        self.configLoaded = true;
+                        self.configError = '请求失败';
                     });
             },
 
@@ -976,7 +985,8 @@
             onValueChange(item, event) {
                 var type = this.getInputType(item);
                 if (type === 'checkbox') {
-                    item.value = event.target.checked;
+                    // 与后端一致：bool存储为"0"/"1"
+                    item.value = event.target.checked ? '1' : '0';
                 } else if (type === 'number') {
                     var vt = (item.value_type || 'string').toLowerCase();
                     item.value = vt === 'float' ? parseFloat(event.target.value) : parseInt(event.target.value);
