@@ -52,36 +52,89 @@ class DataCollector:
     # ==================== LOF基金列表 ====================
 
     def _fetch_lof_list_primary(self) -> List[Dict]:
-        """主源获取LOF基金列表（akshare）
+        """主源获取LOF基金列表（东方财富）
 
-        使用akshare的fund_etf_category_sina接口直接获取LOF基金列表及行情。
-        同时缓存价格数据供fetch_lof_realtime和fetch_lof_iopv使用。
+        使用akshare的fund_value_estimation_em接口获取全量LOF估值数据，
+        同时提取基金列表和IOPV，一次请求覆盖所有LOF基金，比新浪更全。
+        缓存IOPV数据供fetch_lof_iopv使用。
 
         Returns:
             LOF基金列表，每项包含 code, name, status, is_suspended, daily_volume
         """
         try:
             import akshare as ak
+            df = ak.fund_value_estimation_em(symbol="LOF")
+            if df is None or df.empty:
+                logger.warning("东方财富LOF估值返回空数据")
+                return []
+
+            est_col = None
+            for col in df.columns:
+                if "估算值" in str(col) and "单位净值" not in str(col):
+                    est_col = col
+                    break
+
+            name_col = None
+            for col in df.columns:
+                if "基金简称" in str(col):
+                    name_col = col
+                    break
+
+            result = []
+            self._lof_iopv_cache = {}
+            for _, row in df.iterrows():
+                code = str(row.get("基金代码", "")).strip()
+                if not code:
+                    continue
+                name = str(row.get(name_col, "")).strip() if name_col else ""
+                iopv = 0.0
+                if est_col:
+                    val = row.get(est_col, 0)
+                    if val and str(val).strip() not in ("", "---", "--"):
+                        try:
+                            iopv = float(val)
+                            self._lof_iopv_cache[code] = iopv
+                        except (ValueError, TypeError):
+                            pass
+                result.append({
+                    "code": code,
+                    "name": name,
+                    "status": "normal",
+                    "is_suspended": False,
+                    "daily_volume": 0.0,
+                })
+            return result
+        except Exception as ex:
+            logger.error("主源(东方财富)获取LOF基金列表失败: %s", ex)
+            raise
+
+    def _fetch_lof_list_fallback(self) -> List[Dict]:
+        """备用源获取LOF基金列表（新浪）
+
+        东方财富主源失败时的备源，使用新浪分类接口。
+        新浪覆盖可能不全，但作为降级方案可接受。
+
+        Returns:
+            LOF基金列表
+        """
+        try:
+            import akshare as ak
             df = ak.fund_etf_category_sina(symbol="LOF基金")
             if df is None or df.empty:
-                logger.warning("akshare返回空数据")
+                logger.warning("新浪备源返回空数据")
                 return []
 
             result = []
-            # 缓存行情数据，避免后续重复请求
-            self._lof_price_cache = {}
+            self._lof_price_cache = getattr(self, "_lof_price_cache", {})
             for _, row in df.iterrows():
                 code = str(row.get("代码", "")).strip()
                 if not code:
                     continue
                 name = str(row.get("名称", "")).strip()
-                # 成交额（元）转万元
                 amount = float(row.get("成交额", 0) or 0)
                 daily_volume = amount / 10000.0
-                # 最新价为0视为停牌
                 price = float(row.get("最新价", 0) or 0)
                 is_suspended = price <= 0
-                # 缓存价格
                 if price > 0:
                     self._lof_price_cache[code] = price
                 result.append({
@@ -91,21 +144,11 @@ class DataCollector:
                     "is_suspended": is_suspended,
                     "daily_volume": round(daily_volume, 2),
                 })
+            logger.info("新浪备源获取LOF基金列表成功，共%d条", len(result))
             return result
         except Exception as ex:
-            logger.error("主源获取LOF基金列表失败: %s", ex)
-            raise
-
-    def _fetch_lof_list_fallback(self) -> List[Dict]:
-        """备用源获取LOF基金列表（占位实现）
-
-        后续可对接sina等其他数据源。
-
-        Returns:
-            LOF基金列表，当前返回空列表
-        """
-        logger.info("备用源获取LOF基金列表（尚未实现），返回空列表")
-        return []
+            logger.error("新浪备源获取LOF基金列表失败: %s", ex)
+            return []
 
     def fetch_lof_fund_list(self) -> List[Dict]:
         """获取LOF基金列表，主源失败时自动切备用源
@@ -177,6 +220,9 @@ class DataCollector:
                 try:
                     import akshare as ak
                     for code in missed_codes:
+                        pure_code = self._strip_code_prefix(code)
+                        if pure_code in est_map:
+                            result[code] = {"iopv": est_map[pure_code], "iopv_source": "estimated"}
                         try:
                             df = ak.fund_etf_hist_em(symbol=code, period="daily", adjust="qfq")
                             if df is not None and not df.empty:
@@ -239,8 +285,7 @@ class DataCollector:
     def fetch_lof_iopv(self, codes: List[str]) -> Dict[str, Dict]:
         """获取LOF基金IOPV（净值近似值）
 
-        优先使用fund_value_estimation_em批量获取LOF估值，失败时回退逐只查询。
-        批量接口一次请求覆盖所有LOF基金，大幅减少网络请求数。
+        优先使用主源缓存，再尝试fund_value_estimation_em批量获取，失败时回退逐只查询。
 
         Args:
             codes: LOF基金代码列表（可能含sz/sh前缀）
@@ -252,14 +297,25 @@ class DataCollector:
             return {}
 
         result = {}
+        # 优先使用主源(fund_value_estimation_em)已缓存的IOPV
+        cached_iopv = getattr(self, "_lof_iopv_cache", {})
+        if cached_iopv:
+            for code in codes:
+                pure_code = self._strip_code_prefix(code)
+                if pure_code in cached_iopv:
+                    result[code] = {"iopv": cached_iopv[pure_code], "iopv_source": "estimated"}
+
+        missed_codes = [c for c in codes if c not in result]
+        if not missed_codes:
+            self._storage.update_data_source_status("lof_iopv", "ok")
+            return result
+
         # 尝试批量获取LOF估值数据（一次请求覆盖所有LOF）
         try:
             import akshare as ak
             try:
                 est_df = ak.fund_value_estimation_em(symbol="LOF")
                 if est_df is not None and not est_df.empty:
-                    # akshare返回的估值列名含动态日期前缀，如 "2026-04-30-估值数据-估算值"
-                    # 需要按模式匹配找到估算值列
                     est_col = None
                     for col in est_df.columns:
                         if "估算值" in str(col) and "单位净值" not in str(col):
@@ -268,7 +324,6 @@ class DataCollector:
                     if est_col is None:
                         logger.warning("未找到估值列，可用列: %s", list(est_df.columns))
 
-                    # 构建估值映射（纯数字代码 -> 估值）
                     est_map = {}
                     if est_col is not None:
                         for _, row in est_df.iterrows():
@@ -280,8 +335,7 @@ class DataCollector:
                                 except (ValueError, TypeError):
                                     pass
 
-                    # 匹配时去掉sz/sh前缀
-                    for code in codes:
+                    for code in missed_codes:
                         pure_code = self._strip_code_prefix(code)
                         if pure_code in est_map:
                             result[code] = {"iopv": est_map[pure_code], "iopv_source": "estimated"}
@@ -293,8 +347,7 @@ class DataCollector:
             logger.error("akshare未安装，无法获取IOPV数据")
             return {code: {"iopv": 0.0, "iopv_source": "estimated"} for code in codes}
 
-        # 对未获取到估值的基金逐只查询历史净值
-        missed_codes = [c for c in codes if c not in result]
+        missed_codes = [c for c in missed_codes if c not in result]
         if missed_codes:
             logger.debug("批量估值未覆盖%d只基金，逐只查询", len(missed_codes))
             try:

@@ -256,3 +256,81 @@ def test_fetch_lof_purchase_status():
 
     assert result["sz162719"]["purchase_status"] == "暂停申购"
     assert result["sz162719"]["purchase_limit"] == 0
+
+
+def test_fetch_lof_fund_list_primary_uses_eastmoney():
+    """验证主源使用fund_value_estimation_em获取LOF列表"""
+    import pandas as pd
+
+    mock_df = pd.DataFrame({
+        "基金代码": ["164906", "501050"],
+        "基金简称": ["交银互联网", "华夏上证50"],
+        "估算值": [1.0, 2.0],
+    })
+
+    called = {"estimation": False, "sina": False}
+
+    original_estimation = __import__("akshare").fund_value_estimation_em
+    original_sina = __import__("akshare").fund_etf_category_sina
+
+    def fake_estimation(symbol):
+        called["estimation"] = True
+        assert symbol == "LOF"
+        return mock_df
+
+    def fake_sina(symbol):
+        called["sina"] = True
+        return pd.DataFrame()
+
+    collector = _create_collector()
+
+    with patch("akshare.fund_value_estimation_em", fake_estimation, create=True):
+        with patch("akshare.fund_etf_category_sina", fake_sina, create=True):
+            result = collector._fetch_lof_list_primary()
+
+    assert called["estimation"] is True, "主源应调用fund_value_estimation_em"
+    assert called["sina"] is False, "主源不应调用fund_etf_category_sina"
+    assert len(result) >= 1, "应返回基金列表"
+
+
+def test_fetch_lof_fund_list_fallback_uses_sina():
+    """验证备源使用fund_etf_category_sina获取LOF列表"""
+    import pandas as pd
+
+    mock_df = pd.DataFrame({
+        "代码": ["164906"],
+        "名称": ["交银互联网"],
+        "最新价": [1.5],
+        "成交额": [50000],
+    })
+
+    called = {"sina": False}
+
+    def fake_sina(symbol):
+        called["sina"] = True
+        assert symbol == "LOF基金"
+        return mock_df
+
+    collector = _create_collector()
+
+    with patch("akshare.fund_etf_category_sina", fake_sina, create=True):
+        result = collector._fetch_lof_list_fallback()
+
+    assert called["sina"] is True, "备源应调用fund_etf_category_sina"
+    assert len(result) == 1
+    assert result[0]["code"] == "164906"
+
+
+def test_fetch_lof_iopv_uses_primary_cache():
+    """验证fetch_lof_iopv优先使用主源缓存的IOPV"""
+    import pandas as pd
+
+    collector = _create_collector()
+    # 模拟主源已缓存IOPV
+    collector._lof_iopv_cache = {"164906": 1.025, "501050": 2.030}
+
+    with patch("akshare.fund_value_estimation_em", return_value=pd.DataFrame(), create=True):
+        result = collector.fetch_lof_iopv(["164906", "501050"])
+
+    assert result["164906"]["iopv"] == 1.025
+    assert result["501050"]["iopv"] == 2.030

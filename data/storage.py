@@ -598,6 +598,108 @@ class Storage:
             "total_pages": total_pages,
         }
 
+    # ==================== 溢价率聚合 ====================
+
+    def upsert_premium_hourly(self, fund_code: str, hour: str,
+                               avg_premium: float, max_premium: float, min_premium: float,
+                               avg_price: float, avg_iopv: float,
+                               sample_count: int, threshold_count: int) -> None:
+        """插入或更新溢价率小时聚合记录"""
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self._conn.execute(
+            """INSERT INTO premium_hourly (fund_code, hour, avg_premium, max_premium, min_premium,
+                   avg_price, avg_iopv, sample_count, threshold_count, create_time, update_time)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(fund_code, hour) DO UPDATE SET
+                   avg_premium=excluded.avg_premium,
+                   max_premium=excluded.max_premium,
+                   min_premium=excluded.min_premium,
+                   avg_price=excluded.avg_price,
+                   avg_iopv=excluded.avg_iopv,
+                   sample_count=excluded.sample_count,
+                   threshold_count=excluded.threshold_count,
+                   update_time=excluded.update_time""",
+            (fund_code, hour, avg_premium, max_premium, min_premium,
+             avg_price, avg_iopv, sample_count, threshold_count, now, now),
+        )
+        self._conn.commit()
+
+    def aggregate_premium_hourly(self, hour: str, threshold: float = 3.0) -> int:
+        """聚合指定小时的premium_history数据到premium_hourly
+
+        聚合后删除未超阈值的原始记录，保留超阈值的记录。
+
+        Args:
+            hour: 小时窗口，如 "2026-05-01 09"
+            threshold: 溢价率阈值，绝对值超过此值的记录保留
+
+        Returns:
+            聚合的基金数量
+        """
+        hour_prefix = hour + "%"
+        rows = self._conn.execute(
+            "SELECT fund_code, "
+            "AVG(premium_rate) as avg_premium, "
+            "MAX(premium_rate) as max_premium, "
+            "MIN(premium_rate) as min_premium, "
+            "AVG(price) as avg_price, "
+            "AVG(iopv) as avg_iopv, "
+            "COUNT(*) as sample_count, "
+            "SUM(CASE WHEN ABS(premium_rate) >= ? THEN 1 ELSE 0 END) as threshold_count "
+            "FROM premium_history WHERE timestamp LIKE ? "
+            "GROUP BY fund_code",
+            (threshold, hour_prefix),
+        ).fetchall()
+
+        if not rows:
+            return 0
+
+        for row in rows:
+            self.upsert_premium_hourly(
+                fund_code=row["fund_code"],
+                hour=hour,
+                avg_premium=round(row["avg_premium"], 4),
+                max_premium=round(row["max_premium"], 4),
+                min_premium=round(row["min_premium"], 4),
+                avg_price=round(row["avg_price"], 4),
+                avg_iopv=round(row["avg_iopv"], 4),
+                sample_count=row["sample_count"],
+                threshold_count=row["threshold_count"],
+            )
+
+        self._conn.execute(
+            "DELETE FROM premium_history WHERE timestamp LIKE ? AND ABS(premium_rate) < ?",
+            (hour_prefix, threshold),
+        )
+        self._conn.commit()
+        return len(rows)
+
+    def cleanup_old_premium_data(self, retention_days: int, now_str: str = "") -> int:
+        """清理超过保留期的溢价历史数据
+
+        Args:
+            retention_days: 保留天数
+            now_str: 当前时间字符串，为空则使用datetime.now()
+
+        Returns:
+            删除的总记录数
+        """
+        if not now_str:
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        from datetime import timedelta
+        cutoff = (datetime.strptime(now_str, "%Y-%m-%d %H:%M:%S") - timedelta(days=retention_days))
+        cutoff_str = cutoff.strftime("%Y-%m-%d 00:00:00")
+        cutoff_hour = cutoff.strftime("%Y-%m-%d %H")
+
+        cur1 = self._conn.execute(
+            "DELETE FROM premium_history WHERE timestamp < ?", (cutoff_str,)
+        )
+        cur2 = self._conn.execute(
+            "DELETE FROM premium_hourly WHERE hour < ?", (cutoff_hour,)
+        )
+        self._conn.commit()
+        return cur1.rowcount + cur2.rowcount
+
     # ==================== 重载信号 ====================
 
     def insert_reload_signal(self):

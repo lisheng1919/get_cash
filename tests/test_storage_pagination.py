@@ -163,3 +163,118 @@ def test_query_paginated_accepts_valid_params():
                                       search="164906", search_columns=["fund_code"])
     assert result["total"] == 1
     conn.close()
+
+
+# ==================== premium_hourly 聚合 ====================
+
+def test_upsert_premium_hourly():
+    conn, storage = _create_storage()
+    storage.upsert_premium_hourly("164906", "2026-05-01 09", 3.0, 4.0, 2.0, 1.0, 1.0, 10, 2)
+    row = storage._conn.execute(
+        "SELECT * FROM premium_hourly WHERE fund_code='164906' AND hour='2026-05-01 09'"
+    ).fetchone()
+    assert row is not None
+    assert row["avg_premium"] == 3.0
+    assert row["sample_count"] == 10
+    conn.close()
+
+
+def test_upsert_premium_hourly_updates_existing():
+    conn, storage = _create_storage()
+    storage.upsert_premium_hourly("164906", "2026-05-01 09", 3.0, 4.0, 2.0, 1.0, 1.0, 10, 2)
+    storage.upsert_premium_hourly("164906", "2026-05-01 09", 3.5, 5.0, 2.0, 1.1, 1.0, 15, 3)
+    row = storage._conn.execute(
+        "SELECT * FROM premium_hourly WHERE fund_code='164906' AND hour='2026-05-01 09'"
+    ).fetchone()
+    assert row["avg_premium"] == 3.5
+    assert row["sample_count"] == 15
+    conn.close()
+
+
+def test_aggregate_premium_hourly():
+    """验证聚合逻辑：聚合指定小时的数据到premium_hourly"""
+    conn, storage = _create_storage()
+    for i in range(3):
+        storage.insert_premium_history(
+            f"2026-05-01 09:{i*20:02d}:00", "164906",
+            1.0 + i * 0.01, 1.0, 2.0 + i, "estimated"
+        )
+    storage.insert_premium_history(
+        "2026-05-01 10:00:00", "164906", 1.0, 1.0, 3.0, "estimated"
+    )
+
+    count = storage.aggregate_premium_hourly("2026-05-01 09", threshold=3.0)
+    assert count == 1
+
+    row = storage._conn.execute(
+        "SELECT * FROM premium_hourly WHERE fund_code='164906' AND hour='2026-05-01 09'"
+    ).fetchone()
+    assert row is not None
+    assert row["sample_count"] == 3
+    assert row["avg_premium"] == 3.0
+    assert row["max_premium"] == 4.0
+    assert row["min_premium"] == 2.0
+    assert row["threshold_count"] == 2
+
+    remaining = storage._conn.execute(
+        "SELECT COUNT(*) as cnt FROM premium_history WHERE fund_code='164906' AND timestamp LIKE '2026-05-01 09%'"
+    ).fetchone()["cnt"]
+    # premium_rate 2.0 < 3.0 被删除, 3.0和4.0 >= 3.0 保留
+    assert remaining == 2
+    conn.close()
+
+
+def test_aggregate_premium_hourly_no_data():
+    """无数据时不聚合"""
+    conn, storage = _create_storage()
+    count = storage.aggregate_premium_hourly("2026-05-01 09", threshold=3.0)
+    assert count == 0
+    conn.close()
+
+
+def test_cleanup_old_premium_data():
+    """验证数据清理：删除超过保留期的记录"""
+    conn, storage = _create_storage()
+    storage.insert_premium_history(
+        "2026-01-01 09:00:00", "164906", 1.0, 1.0, 3.0, "estimated"
+    )
+    storage.upsert_premium_hourly("164906", "2026-01-01 09", 3.0, 3.0, 3.0, 1.0, 1.0, 1, 1)
+
+    deleted = storage.cleanup_old_premium_data(retention_days=90, now_str="2026-05-01 00:00:00")
+    assert deleted >= 1
+
+    cnt = storage._conn.execute(
+        "SELECT COUNT(*) as cnt FROM premium_history WHERE fund_code='164906'"
+    ).fetchone()["cnt"]
+    assert cnt == 0
+    cnt2 = storage._conn.execute(
+        "SELECT COUNT(*) as cnt FROM premium_hourly WHERE fund_code='164906'"
+    ).fetchone()["cnt"]
+    assert cnt2 == 0
+    conn.close()
+
+
+def test_get_premium_hourly_summary():
+    """验证获取基金分组汇总"""
+    conn, storage = _create_storage()
+    storage.upsert_premium_hourly("164906", "2026-05-01 09", 3.0, 4.0, 2.0, 1.0, 1.0, 10, 2)
+    storage.upsert_premium_hourly("501050", "2026-05-01 09", 1.5, 2.0, 1.0, 2.0, 2.0, 8, 0)
+
+    result = storage.query_paginated("premium_hourly", page=1, page_size=10,
+                                      order_by="fund_code", order_dir="ASC")
+    assert result["total"] == 2
+    conn.close()
+
+
+def test_get_premium_hourly_by_fund():
+    """验证获取指定基金的小时汇总"""
+    conn, storage = _create_storage()
+    storage.upsert_premium_hourly("164906", "2026-05-01 09", 3.0, 4.0, 2.0, 1.0, 1.0, 10, 2)
+    storage.upsert_premium_hourly("164906", "2026-05-01 10", 3.5, 5.0, 2.5, 1.1, 1.0, 12, 3)
+    storage.upsert_premium_hourly("501050", "2026-05-01 09", 1.5, 2.0, 1.0, 2.0, 2.0, 8, 0)
+
+    result = storage.query_paginated("premium_hourly", page=1, page_size=10,
+                                      extra_where="fund_code='164906'",
+                                      order_by="hour", order_dir="DESC")
+    assert result["total"] == 2
+    conn.close()

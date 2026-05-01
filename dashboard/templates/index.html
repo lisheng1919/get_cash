@@ -293,23 +293,84 @@
 
         <!-- ==================== 业务数据 ==================== -->
         <div v-show="activeTab === 'data'" v-scope="DataTab()">
-            <!-- LOF溢价历史 -->
+            <!-- LOF溢价历史（分组汇总视图） -->
             <div class="section">
                 <h2>LOF溢价历史</h2>
-                <div v-scope="DataTable({
-                    apiUrl: '/api/data/lof_premium',
-                    columns: [
-                        {key: 'timestamp', label: '时间'},
-                        {key: 'fund_code', label: '基金代码'},
-                        {key: 'fund_name', label: '基金名称', sortable: false},
-                        {key: 'price', label: '价格'},
-                        {key: 'iopv', label: 'IOPV'},
-                        {key: 'premium_rate', label: '溢价率'},
-                        {key: 'iopv_source', label: 'IOPV来源'}
-                    ],
-                    searchPlaceholder: '搜索基金代码/名称/IOPV来源...',
-                    defaultSortBy: 'timestamp'
-                })" @vue:mounted="dtInit"></div>
+                <div v-scope="LofPremiumSummary()" @vue:mounted="lofInit">
+                    <div class="dt-toolbar">
+                        <div class="dt-search">
+                            <input type="text" v-model="search" placeholder="搜索基金代码/名称..." @keydown.enter="doSearch" @input="onSearchInput">
+                            <button @click="doSearch">搜索</button>
+                        </div>
+                        <div class="dt-pagesize">
+                            每页
+                            <select :value="pageSize" @change="changePageSize($event.target.value)">
+                                <option value="10">10</option>
+                                <option value="20">20</option>
+                                <option value="50">50</option>
+                            </select>
+                            条
+                        </div>
+                    </div>
+                    <div v-if="loading" class="dt-loading">加载中...</div>
+                    <table v-if="!loading">
+                        <thead>
+                            <tr>
+                                <th style="width:30px"></th>
+                                <th @click="toggleSort('fund_code')" :style="sortBy==='fund_code'?'cursor:pointer;font-weight:bold':'cursor:pointer'">基金代码 <span v-if="sortBy==='fund_code'">{{ sortDir==='ASC'?'↑':'↓' }}</span></th>
+                                <th>基金名称</th>
+                                <th @click="toggleSort('avg_premium')" :style="sortBy==='avg_premium'?'cursor:pointer;font-weight:bold':'cursor:pointer'">最新溢价率 <span v-if="sortBy==='avg_premium'">{{ sortDir==='ASC'?'↑':'↓' }}</span></th>
+                                <th>最大溢价率</th>
+                                <th>采样次数</th>
+                                <th>超阈值次数</th>
+                                <th @click="toggleSort('hour')" :style="sortBy==='hour'?'cursor:pointer;font-weight:bold':'cursor:pointer'">最近时间 <span v-if="sortBy==='hour'">{{ sortDir==='ASC'?'↑':'↓' }}</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-if="items.length === 0"><td colspan="8" class="empty">暂无数据</td></tr>
+                            <template v-for="item in items">
+                                <tr style="cursor:pointer" @click="toggleExpand(item.fund_code)">
+                                    <td>{{ expandedFund === item.fund_code ? '▼' : '▶' }}</td>
+                                    <td>{{ item.fund_code }}</td>
+                                    <td>{{ item.fund_name || '' }}</td>
+                                    <td :class="statusClass(item.avg_premium >= 3 ? 'ok' : '')">{{ item.avg_premium ? item.avg_premium.toFixed(2) + '%' : '--' }}</td>
+                                    <td>{{ item.max_premium ? item.max_premium.toFixed(2) + '%' : '--' }}</td>
+                                    <td>{{ item.sample_count }}</td>
+                                    <td>{{ item.threshold_count }}</td>
+                                    <td>{{ item.hour }}</td>
+                                </tr>
+                                <tr v-if="expandedFund === item.fund_code">
+                                    <td colspan="8" style="padding:8px 16px;background:#fafbfc">
+                                        <div v-if="detailLoading" class="dt-loading">加载明细...</div>
+                                        <table v-if="!detailLoading" style="width:100%;font-size:12px">
+                                            <thead><tr><th>时间</th><th>价格</th><th>IOPV</th><th>溢价率</th><th>来源</th></tr></thead>
+                                            <tbody>
+                                                <tr v-if="detailItems.length === 0"><td colspan="5" class="empty">无超阈值记录</td></tr>
+                                                <tr v-for="d in detailItems">
+                                                    <td>{{ d.timestamp }}</td>
+                                                    <td>{{ d.price }}</td>
+                                                    <td>{{ d.iopv }}</td>
+                                                    <td :class="statusClass('ok')">{{ d.premium_rate ? d.premium_rate.toFixed(2) + '%' : '--' }}</td>
+                                                    <td>{{ d.iopv_source }}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                        <div v-if="detailItems.length > 0" style="margin-top:4px;font-size:11px;color:#1890ff;cursor:pointer" @click.stop="loadHistory(item.fund_code)">查看7天历史趋势 →</div>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                    <div class="dt-pagination" v-if="total > 0">
+                        <span>共 {{ total }} 条，第 {{ page }}/{{ totalPages }} 页</span>
+                        <div class="dt-page-btns">
+                            <button :disabled="page <= 1" @click="changePage(1)">首页</button>
+                            <button :disabled="page <= 1" @click="changePage(page - 1)">上一页</button>
+                            <button :disabled="page >= totalPages" @click="changePage(page + 1)">下一页</button>
+                            <button :disabled="page >= totalPages" @click="changePage(totalPages)">末页</button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- 交易信号 -->
@@ -540,6 +601,135 @@
         if (status === 'failure' || status === 'fail') return '●';
         if (status === 'skip') return '◐';
         return '○';
+    }
+
+    /* ===== LOF溢价分组汇总组件 ===== */
+    function LofPremiumSummary() {
+        return {
+            items: [],
+            total: 0,
+            page: 1,
+            pageSize: 10,
+            totalPages: 0,
+            search: '',
+            loading: false,
+            sortBy: 'hour',
+            sortDir: 'DESC',
+            expandedFund: '',
+            detailItems: [],
+            detailLoading: false,
+
+            lofInit() {
+                this.fetchData();
+            },
+
+            fetchData() {
+                var self = this;
+                self.loading = true;
+                var params = new URLSearchParams({
+                    page: self.page,
+                    page_size: self.pageSize,
+                    sort_by: self.sortBy,
+                    sort_order: self.sortDir
+                });
+                if (self.search) params.set('search', self.search);
+
+                fetch('/api/data/lof_premium_summary?' + params.toString())
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        self.items = data.items || [];
+                        self.total = data.total || 0;
+                        self.page = data.page || 1;
+                        self.pageSize = data.page_size || 10;
+                        self.totalPages = data.total_pages || 0;
+                        self.loading = false;
+                    })
+                    .catch(function() {
+                        self.items = [];
+                        self.total = 0;
+                        self.totalPages = 0;
+                        self.loading = false;
+                    });
+            },
+
+            doSearch() {
+                this.page = 1;
+                this.fetchData();
+            },
+
+            onSearchInput() {
+                if (!this.search) this.doSearch();
+            },
+
+            changePage(n) {
+                if (n < 1 || n > this.totalPages) return;
+                this.page = n;
+                this.fetchData();
+            },
+
+            changePageSize(s) {
+                this.pageSize = parseInt(s);
+                this.page = 1;
+                this.fetchData();
+            },
+
+            toggleSort(key) {
+                if (this.sortBy === key) {
+                    this.sortDir = this.sortDir === 'ASC' ? 'DESC' : 'ASC';
+                } else {
+                    this.sortBy = key;
+                    this.sortDir = 'DESC';
+                }
+                this.page = 1;
+                this.fetchData();
+            },
+
+            toggleExpand(fundCode) {
+                if (this.expandedFund === fundCode) {
+                    this.expandedFund = '';
+                    this.detailItems = [];
+                    return;
+                }
+                this.expandedFund = fundCode;
+                this.detailLoading = true;
+                this.detailItems = [];
+                var self = this;
+                fetch('/api/data/lof_premium?fund_code=' + fundCode + '&page_size=20&sort_by=timestamp&sort_order=DESC')
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        self.detailItems = data.items || [];
+                        self.detailLoading = false;
+                    })
+                    .catch(function() {
+                        self.detailItems = [];
+                        self.detailLoading = false;
+                    });
+            },
+
+            loadHistory(fundCode) {
+                var url = '/api/data/lof_premium_summary?fund_code=' + fundCode + '&page_size=168';
+                var self = this;
+                fetch(url)
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (data.items && data.items.length > 0) {
+                            self.detailItems = [];
+                            self.detailLoading = true;
+                            var hourlyItems = data.items.map(function(h) {
+                                return {
+                                    timestamp: h.hour + ':00',
+                                    price: h.avg_price ? h.avg_price.toFixed(4) : '--',
+                                    iopv: h.avg_iopv ? h.avg_iopv.toFixed(4) : '--',
+                                    premium_rate: h.avg_premium,
+                                    iopv_source: '小时汇总(' + h.sample_count + '次采样)'
+                                };
+                            });
+                            self.detailItems = hourlyItems;
+                            self.detailLoading = false;
+                        }
+                    });
+            }
+        };
     }
 
     /* ===== App 组件 ===== */

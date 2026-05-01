@@ -29,6 +29,21 @@ DDL_STATEMENTS = [
         iopv_source TEXT NOT NULL DEFAULT '',
         PRIMARY KEY (id AUTOINCREMENT)
     )""",
+    # 溢价率小时聚合表
+    """CREATE TABLE IF NOT EXISTS premium_hourly (
+        fund_code TEXT NOT NULL DEFAULT '',
+        hour TEXT NOT NULL DEFAULT '',
+        avg_premium REAL NOT NULL DEFAULT 0.0,
+        max_premium REAL NOT NULL DEFAULT 0.0,
+        min_premium REAL NOT NULL DEFAULT 0.0,
+        avg_price REAL NOT NULL DEFAULT 0.0,
+        avg_iopv REAL NOT NULL DEFAULT 0.0,
+        sample_count INT NOT NULL DEFAULT 0,
+        threshold_count INT NOT NULL DEFAULT 0,
+        create_time TEXT NOT NULL DEFAULT '',
+        update_time TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (fund_code, hour)
+    )""",
     # 交易信号表
     """CREATE TABLE IF NOT EXISTS trade_signal (
         id INTEGER NOT NULL,
@@ -173,6 +188,8 @@ DDL_STATEMENTS = [
 INDEX_STATEMENTS = [
     "CREATE INDEX IF NOT EXISTS idx_premium_history_code ON premium_history(fund_code)",
     "CREATE INDEX IF NOT EXISTS idx_premium_history_ts ON premium_history(timestamp)",
+    "CREATE INDEX IF NOT EXISTS idx_premium_history_code_ts ON premium_history(fund_code, timestamp)",
+    "CREATE INDEX IF NOT EXISTS idx_premium_hourly_hour ON premium_hourly(hour)",
     "CREATE INDEX IF NOT EXISTS idx_trade_signal_code ON trade_signal(fund_code)",
     "CREATE INDEX IF NOT EXISTS idx_holiday_date ON holiday_calendar(date)",
     "CREATE INDEX IF NOT EXISTS idx_execution_log_strategy ON strategy_execution_log(strategy_name)",
@@ -187,6 +204,7 @@ INDEX_STATEMENTS = [
 TABLE_NAMES = [
     "lof_fund",
     "premium_history",
+    "premium_hourly",
     "trade_signal",
     "position",
     "bond_ipo",

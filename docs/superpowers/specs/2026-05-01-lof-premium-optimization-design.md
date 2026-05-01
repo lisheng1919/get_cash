@@ -1,6 +1,6 @@
 # LOF溢价数据优化与数据源切换 Design Spec
 
-## Why
+## Why 
 
 当前LOF溢价历史存在两个问题：
 

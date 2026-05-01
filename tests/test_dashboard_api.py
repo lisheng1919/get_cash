@@ -374,3 +374,22 @@ def test_api_mute_days_validation(app_client):
     # days=7 合法
     resp = app_client.post("/api/mute", json={"fund_code": "164906", "days": 7})
     assert resp.status_code == 200
+
+
+# ==================== LOF溢价分组汇总API ====================
+
+def test_api_data_lof_premium_summary(app_client):
+    """验证LOF溢价分组汇总API"""
+    resp = app_client.get("/api/data/lof_premium_summary")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert "items" in data
+    assert "total" in data
+
+
+def test_api_data_lof_premium_with_fund_code(app_client):
+    """验证LOF溢价明细API支持fund_code过滤"""
+    resp = app_client.get("/api/data/lof_premium?fund_code=164906")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert "items" in data

@@ -197,22 +197,62 @@ def create_app(storage=None, config_manager=None):
 
     @app.route("/api/data/lof_premium")
     def api_data_lof_premium():
-        """LOF溢价率监控 - 分页查询（关联基金名称）"""
+        """LOF溢价超阈值明细 - 按基金分页"""
         storage = _get_storage()
         page = request.args.get("page", 1, type=int)
         page_size = request.args.get("page_size", 10, type=int)
         search = request.args.get("search")
         sort_by = request.args.get("sort_by", "timestamp")
         sort_order = request.args.get("sort_order", "DESC")
+        fund_code = request.args.get("fund_code")
+
+        extra_where = None
+        extra_params = None
+        search_cols = ["ph.fund_code", "ph.iopv_source", "f.name"]
+
+        if fund_code:
+            extra_where = "ph.fund_code = ?"
+            extra_params = [fund_code]
+
         return jsonify(storage.query_paginated(
             "premium_history",
             page=page, page_size=page_size,
-            search=search, search_columns=["ph.fund_code", "ph.iopv_source", "f.name"],
+            search=search, search_columns=search_cols,
             order_by=sort_by, order_dir=sort_order,
             join_clause="LEFT JOIN lof_fund f ON ph.fund_code = f.code",
             extra_select=", f.name as fund_name",
             alias_prefix="ph",
+            extra_where=extra_where,
+            extra_params=extra_params,
         ))
+
+    @app.route("/api/data/lof_premium_summary")
+    def api_data_lof_premium_summary():
+        """LOF溢价分组汇总 - 按基金分组显示小时级汇总"""
+        storage = _get_storage()
+        page = request.args.get("page", 1, type=int)
+        page_size = request.args.get("page_size", 10, type=int)
+        search = request.args.get("search")
+        fund_code = request.args.get("fund_code")
+
+        if fund_code:
+            return jsonify(storage.query_paginated(
+                "premium_hourly",
+                page=page, page_size=page_size,
+                search=search, search_columns=["fund_code"],
+                order_by="hour", order_dir="DESC",
+                extra_where="fund_code = ?",
+                extra_params=[fund_code],
+            ))
+        else:
+            return jsonify(storage.query_paginated(
+                "premium_hourly",
+                page=page, page_size=page_size,
+                search=search, search_columns=["fund_code"],
+                order_by="hour", order_dir="DESC",
+                join_clause="LEFT JOIN lof_fund f ON premium_hourly.fund_code = f.code",
+                extra_select=", f.name as fund_name",
+            ))
 
     @app.route("/api/data/trade_signal")
     def api_data_trade_signal():

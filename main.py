@@ -366,6 +366,37 @@ def main():
     # 添加配置轮询任务（每30秒检查重载信号）
     scheduler.add_config_poll_job(config_manager, interval=30)
 
+    # 溢价历史每小时聚合（每小时的第5分钟执行，聚合上一小时的数据）
+    def aggregate_premium():
+        from datetime import timedelta
+        now = datetime.now()
+        last_hour = (now - timedelta(hours=1)).strftime("%Y-%m-%d %H")
+        lof_config = config.get("lof_premium", {})
+        threshold = lof_config.get("premium_threshold", 3.0)
+        count = storage.aggregate_premium_hourly(last_hour, threshold=threshold)
+        if count > 0:
+            logger.info("溢价历史聚合完成: %s, %d只基金", last_hour, count)
+
+    scheduler._scheduler.add_job(
+        aggregate_premium, 'cron', minute=5, id='aggregate_premium'
+    )
+
+    # 每日数据清理（凌晨2:00执行）
+    def cleanup_premium_data():
+        retention_days = int(config.get("system", {}).get("data_retention_days", 90))
+        deleted = storage.cleanup_old_premium_data(retention_days=retention_days)
+        if deleted > 0:
+            logger.info("清理过期溢价数据: 删除%d条记录, 保留%d天", deleted, retention_days)
+        do_vacuum = config.get("system", {}).get("db_vacuum_weekly", True)
+        if do_vacuum:
+            if datetime.now().weekday() == 6:
+                conn.execute("VACUUM")
+                logger.info("SQLite VACUUM完成")
+
+    scheduler._scheduler.add_job(
+        cleanup_premium_data, 'cron', hour=2, minute=0, id='cleanup_premium_data'
+    )
+
     # 静默过期基金自动清理（每小时检查一次）
     def cleanup_expired_mutes():
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
