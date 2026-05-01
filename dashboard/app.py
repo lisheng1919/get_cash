@@ -380,4 +380,27 @@ def close_db(exception):
 
 
 if __name__ == "__main__":
-    create_app().run(debug=True, port=5000)
+    # 独立运行时自动创建Storage和ConfigManager
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    init_db(conn)
+    storage = Storage(conn)
+
+    # 尝试加载config.yaml初始化ConfigManager
+    config_manager = None
+    try:
+        config_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "config.yaml",
+        )
+        if os.path.exists(config_path):
+            import yaml
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f) or {}
+            from config_manager import ConfigManager
+            config_manager = ConfigManager(storage, scheduler=None, config_dict=config)
+            config_manager.init_from_yaml()
+    except Exception as e:
+        print(f"警告: ConfigManager初始化失败({e})，配置管理功能不可用")
+
+    create_app(storage=storage, config_manager=config_manager).run(debug=True, port=5000)
