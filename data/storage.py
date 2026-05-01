@@ -510,8 +510,33 @@ class Storage:
 
     def query_paginated(self, table, page=1, page_size=10, search=None,
                         search_columns=None, order_by="id", order_dir="DESC",
-                        extra_where=None, extra_params=None):
-        """通用分页查询"""
+                        extra_where=None, extra_params=None,
+                        join_clause=None, extra_select=None, alias_prefix=None,
+                        page_size_max=100):
+        """通用分页查询
+
+        WARNING: extra_where 和 join_clause 直接拼入SQL，仅允许硬编码值，
+        禁止传入用户输入。
+
+        Args:
+            table: 表名（需通过标识符校验）
+            page: 页码，从1开始
+            page_size: 每页条数，上限page_size_max
+            search: 搜索关键词
+            search_columns: 搜索列名列表，支持"别名.列名"格式（如"ph.fund_code"）
+            order_by: 排序列名（需通过标识符校验）
+            order_dir: 排序方向，ASC或DESC
+            extra_where: 额外WHERE条件（仅硬编码）
+            extra_params: 额外WHERE参数
+            join_clause: JOIN子句，如 "LEFT JOIN lof_fund f ON ph.fund_code = f.code"
+            extra_select: 额外SELECT列，如 ", f.name as fund_name"
+            alias_prefix: 表别名前缀，如"ph"，用于SELECT/ORDER BY/FROM
+            page_size_max: page_size上限，默认100
+        """
+        # 参数边界校验
+        page = max(1, page)
+        page_size = max(1, min(page_size, page_size_max))
+
         # 白名单校验，防止SQL注入
         if not _is_valid_identifier(table):
             raise ValueError(f"Invalid table name: {table}")
@@ -521,7 +546,12 @@ class Storage:
             raise ValueError(f"Invalid order_dir: {order_dir}, only ASC/DESC allowed")
         if search_columns:
             for col in search_columns:
-                if not _is_valid_identifier(col):
+                # 支持 "alias.column" 格式
+                parts = col.split(".")
+                if len(parts) == 2:
+                    if not _is_valid_identifier(parts[0]) or not _is_valid_identifier(parts[1]):
+                        raise ValueError(f"Invalid column name: {col}")
+                elif not _is_valid_identifier(col):
                     raise ValueError(f"Invalid column name: {col}")
 
         where_clauses = []
@@ -539,11 +569,24 @@ class Storage:
 
         where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
-        count_sql = f"SELECT COUNT(*) as cnt FROM {table}{where_sql}"
+        # 构建FROM子句（支持别名和JOIN）
+        from_clause = f"{table} {alias_prefix}" if alias_prefix else table
+        if join_clause:
+            from_clause += f" {join_clause}"
+
+        # 构建SELECT列
+        select_cols = f"{alias_prefix}.*" if alias_prefix else "*"
+        if extra_select:
+            select_cols += extra_select
+
+        # ORDER BY列名（带别名前缀）
+        order_col = f"{alias_prefix}.{order_by}" if alias_prefix else order_by
+
+        count_sql = f"SELECT COUNT(*) as cnt FROM {from_clause}{where_sql}"
         total = self._conn.execute(count_sql, params).fetchone()["cnt"]
 
         offset = (page - 1) * page_size
-        query_sql = f"SELECT * FROM {table}{where_sql} ORDER BY {order_by} {order_dir} LIMIT ? OFFSET ?"
+        query_sql = f"SELECT {select_cols} FROM {from_clause}{where_sql} ORDER BY {order_col} {order_dir} LIMIT ? OFFSET ?"
         rows = self._conn.execute(query_sql, params + [page_size, offset]).fetchall()
 
         total_pages = max(1, (total + page_size - 1) // page_size)

@@ -301,12 +301,13 @@
                     columns: [
                         {key: 'timestamp', label: '时间'},
                         {key: 'fund_code', label: '基金代码'},
+                        {key: 'fund_name', label: '基金名称', sortable: false},
                         {key: 'price', label: '价格'},
                         {key: 'iopv', label: 'IOPV'},
                         {key: 'premium_rate', label: '溢价率'},
                         {key: 'iopv_source', label: 'IOPV来源'}
                     ],
-                    searchPlaceholder: '搜索基金代码/IOPV来源...',
+                    searchPlaceholder: '搜索基金代码/名称/IOPV来源...',
                     defaultSortBy: 'timestamp'
                 })" @vue:mounted="dtInit"></div>
             </div>
@@ -319,12 +320,13 @@
                     columns: [
                         {key: 'trigger_time', label: '触发时间'},
                         {key: 'fund_code', label: '基金代码'},
+                        {key: 'fund_name', label: '基金名称', sortable: false},
                         {key: 'premium_rate', label: '溢价率'},
                         {key: 'action', label: '动作'},
                         {key: 'status', label: '状态'},
                         {key: 'iopv_source', label: 'IOPV来源'}
                     ],
-                    searchPlaceholder: '搜索基金代码/动作/状态...',
+                    searchPlaceholder: '搜索基金代码/名称/动作/状态...',
                     defaultSortBy: 'trigger_time'
                 })" @vue:mounted="dtInit"></div>
             </div>
@@ -373,6 +375,7 @@
                     columns: [
                         {key: 'date', label: '日期'},
                         {key: 'code', label: '代码'},
+                        {key: 'code_name', label: '品种名称', sortable: false},
                         {key: 'rate', label: '利率'},
                         {key: 'amount', label: '金额'},
                         {key: 'due_date', label: '到期日'},
@@ -482,9 +485,9 @@
             <table v-if="!loading">
                 <thead>
                     <tr>
-                        <th v-for="col in columns" @click="toggleSort(col.key)" style="cursor:pointer" :title="'点击排序'">
+                        <th v-for="col in columns" @click="toggleSort(col)" :style="col.sortable === false ? '' : 'cursor:pointer'" :title="col.sortable === false ? '' : '点击排序'">
                             {{ col.label }}
-                            <span v-if="sortBy === col.key">{{ sortDir === 'ASC' ? '↑' : '↓' }}</span>
+                            <span v-if="col.sortable !== false && sortBy === col.key">{{ sortDir === 'ASC' ? '↑' : '↓' }}</span>
                         </th>
                     </tr>
                 </thead>
@@ -639,7 +642,9 @@
             },
 
             // 表头排序切换
-            toggleSort(key) {
+            toggleSort(col) {
+                if (col.sortable === false) return;
+                var key = col.key;
                 if (this.sortBy === key) {
                     this.sortDir = this.sortDir === 'ASC' ? 'DESC' : 'ASC';
                 } else {

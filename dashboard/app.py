@@ -41,6 +41,16 @@ def create_app(storage=None, config_manager=None):
 
     # ==================== 辅助函数 ====================
 
+    # 逆回购品种代码到名称的映射
+    _REPO_NAME_MAP = {
+        "204001": "GC001(沪1天)", "204002": "GC002(沪2天)", "204003": "GC003(沪3天)",
+        "204004": "GC004(沪4天)", "204007": "GC007(沪7天)", "204014": "GC014(沪14天)",
+        "204028": "GC028(沪28天)", "204091": "GC091(沪91天)", "204182": "GC182(沪182天)",
+        "131810": "R-001(深1天)", "131811": "R-002(深2天)", "131800": "R-003(深3天)",
+        "131809": "R-004(深4天)", "131801": "R-007(深7天)", "131802": "R-014(深14天)",
+        "131803": "R-028(深28天)", "131805": "R-091(深91天)", "131806": "R-182(深182天)",
+    }
+
     def _get_storage():
         """获取Storage实例
 
@@ -187,7 +197,7 @@ def create_app(storage=None, config_manager=None):
 
     @app.route("/api/data/lof_premium")
     def api_data_lof_premium():
-        """LOF溢价率监控 - 分页查询"""
+        """LOF溢价率监控 - 分页查询（关联基金名称）"""
         storage = _get_storage()
         page = request.args.get("page", 1, type=int)
         page_size = request.args.get("page_size", 10, type=int)
@@ -197,13 +207,16 @@ def create_app(storage=None, config_manager=None):
         return jsonify(storage.query_paginated(
             "premium_history",
             page=page, page_size=page_size,
-            search=search, search_columns=["fund_code", "iopv_source"],
+            search=search, search_columns=["ph.fund_code", "ph.iopv_source", "f.name"],
             order_by=sort_by, order_dir=sort_order,
+            join_clause="LEFT JOIN lof_fund f ON ph.fund_code = f.code",
+            extra_select=", f.name as fund_name",
+            alias_prefix="ph",
         ))
 
     @app.route("/api/data/trade_signal")
     def api_data_trade_signal():
-        """LOF套利信号 - 分页查询"""
+        """LOF套利信号 - 分页查询（关联基金名称）"""
         storage = _get_storage()
         page = request.args.get("page", 1, type=int)
         page_size = request.args.get("page_size", 10, type=int)
@@ -213,8 +226,11 @@ def create_app(storage=None, config_manager=None):
         return jsonify(storage.query_paginated(
             "trade_signal",
             page=page, page_size=page_size,
-            search=search, search_columns=["fund_code", "action", "status"],
+            search=search, search_columns=["ts.fund_code", "ts.action", "ts.status", "f.name"],
             order_by=sort_by, order_dir=sort_order,
+            join_clause="LEFT JOIN lof_fund f ON ts.fund_code = f.code",
+            extra_select=", f.name as fund_name",
+            alias_prefix="ts",
         ))
 
     @app.route("/api/data/bond_ipo")
@@ -251,19 +267,24 @@ def create_app(storage=None, config_manager=None):
 
     @app.route("/api/data/reverse_repo")
     def api_data_reverse_repo():
-        """逆回购记录 - 分页查询"""
+        """逆回购记录 - 分页查询（附带品种名称）"""
         storage = _get_storage()
         page = request.args.get("page", 1, type=int)
         page_size = request.args.get("page_size", 10, type=int)
         search = request.args.get("search")
         sort_by = request.args.get("sort_by", "date")
         sort_order = request.args.get("sort_order", "DESC")
-        return jsonify(storage.query_paginated(
+
+        result = storage.query_paginated(
             "reverse_repo",
             page=page, page_size=page_size,
             search=search, search_columns=["date", "code"],
             order_by=sort_by, order_dir=sort_order,
-        ))
+        )
+        # 为每条记录附加品种名称
+        for item in result["items"]:
+            item["code_name"] = _REPO_NAME_MAP.get(item.get("code", ""), item.get("code", ""))
+        return jsonify(result)
 
     @app.route("/api/data/daily_summary")
     def api_data_daily_summary():
